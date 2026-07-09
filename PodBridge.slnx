@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/PodBridge.Core/PodBridge.Core.csproj" />
+    <Project Path="src/PodBridge.App/PodBridge.App.csproj" />
+    <Project Path="src/PodBridge.Windows/PodBridge.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PodBridge.Core.Tests/PodBridge.Core.Tests.csproj" />
