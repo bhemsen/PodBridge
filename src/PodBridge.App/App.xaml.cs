@@ -1,5 +1,7 @@
 using System.Windows;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using PodBridge.Core.Bluetooth;
 
 namespace PodBridge.App;
 
@@ -16,6 +18,7 @@ public partial class App : Application
     private SingleInstanceGuard? _instanceGuard;
     private IHost? _host;
     private TrayIcon? _trayIcon;
+    private TrayStatusController? _trayStatusController;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -35,10 +38,22 @@ public partial class App : Application
         // Tray icon is the app's only surface in Phase 1; create it once the
         // host is up and tear it down on exit.
         _trayIcon = TrayIcon.Create();
+
+        // Drive the tray from live connection status and show first-run pairing
+        // guidance. StatusChanged is marshalled to this (UI) dispatcher inside
+        // the controller.
+        var monitor = _host.Services.GetRequiredService<IConnectionMonitor>();
+        _trayStatusController = TrayStatusController.Create(
+            _trayIcon, monitor, Dispatcher, new FirstRunGuidanceState());
+        _trayStatusController.Start();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // Unsubscribe first so no late StatusChanged touches a disposed tray.
+        _trayStatusController?.Dispose();
+        _trayStatusController = null;
+
         _trayIcon?.Dispose();
         _trayIcon = null;
 
