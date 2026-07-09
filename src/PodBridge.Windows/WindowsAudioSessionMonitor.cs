@@ -21,10 +21,12 @@ namespace PodBridge.Windows;
 /// opened/closed" signal, which additionally covers the Communications-<i>render</i>
 /// case (HFP trigger #2) the capture scan cannot see.</para>
 /// <para><b>Event-primary, reconciled.</b> <c>OnSessionCreated</c> and duck/unduck
-/// callbacks are treated as triggers that prompt a re-enumeration; the duck state is
-/// reconciled against a self-maintained session-id set, and a coarse safety re-scan
-/// closes the documented "notifications silently stop" gap. A single debounced
-/// boolean (active capture session OR duck count &gt; 0) drives the Core-facing
+/// callbacks are treated as triggers that prompt a re-enumeration; the capture side
+/// is re-derived authoritatively on every tick, and the render-side duck signal is
+/// tracked from the OS's own <c>countCommunicationSessions</c> refcount rather than a
+/// self-maintained id set, so a silently dropped unduck cannot pin it on. A coarse
+/// safety re-scan closes the documented "notifications silently stop" gap. A single
+/// debounced boolean (active capture session OR an open communication session) drives the Core-facing
 /// events: <see cref="CommunicationsCaptureStarted"/> on its <c>false→true</c> edge,
 /// <see cref="CommunicationsCaptureStopped"/> on <c>true→false</c> — so an overlap
 /// (one call ending as another continues) never flaps.</para>
@@ -43,9 +45,15 @@ public sealed class WindowsAudioSessionMonitor : IAudioSessionMonitor, IDisposab
 
     private readonly object _gate = new();
 
-    // Self-maintained set of currently-ducked communication sessions (research #26
-    // §3): duck adds, unduck removes; count > 0 means a communication stream is open.
-    private readonly HashSet<string> _duckedSessions = new(StringComparer.Ordinal);
+    // The OS's own live count of open communication sessions on the eCommunications
+    // endpoint (research #26 §2, the "natural refcount for open/close bookkeeping").
+    // A duck REPLACES it with the OS-reported countCommunicationSessions (never
+    // accumulates), an unduck best-effort decrements it, and DropManager/Stop reset it.
+    // Using the OS count instead of a self-maintained id set means a single silently
+    // dropped unduck (research #26 §3) can no longer pin the render-side signal on
+    // until Stop(): it is healed by the next duck's authoritative count or an endpoint
+    // change. > 0 means a communication stream (render or capture) is open.
+    private int _communicationSessionCount;
 
     private Thread? _comThread;
     private AutoResetEvent? _wake;
@@ -113,7 +121,7 @@ public sealed class WindowsAudioSessionMonitor : IAudioSessionMonitor, IDisposab
         {
             _wake?.Dispose();
             _wake = null;
-            _duckedSessions.Clear();
+            _communicationSessionCount = 0;
 
             // Reset the debounced edge state (safe now the COM thread has exited) so a
             // Start→engaged→Stop→Start cycle re-detects from a clean "not engaged"
@@ -231,6 +239,14 @@ public sealed class WindowsAudioSessionMonitor : IAudioSessionMonitor, IDisposab
 
     private void DropManager()
     {
+        // The comms endpoint is being released (default-device change / device removed):
+        // reset the render-side duck signal so stale state from the old endpoint cannot
+        // carry over and pin "comms open" against the freshly-acquired endpoint.
+        lock (_gate)
+        {
+            _communicationSessionCount = 0;
+        }
+
         var manager = _manager;
         _manager = null;
         if (manager is null)
@@ -266,10 +282,10 @@ public sealed class WindowsAudioSessionMonitor : IAudioSessionMonitor, IDisposab
     // scan plus the self-maintained duck set, and raise Core events only on edges.
     private void Reconcile()
     {
-        int duckCount;
+        int commCount;
         lock (_gate)
         {
-            duckCount = _duckedSessions.Count;
+            commCount = _communicationSessionCount;
         }
 
         var captureActive = false;
@@ -287,7 +303,7 @@ public sealed class WindowsAudioSessionMonitor : IAudioSessionMonitor, IDisposab
             }
         }
 
-        RaiseIfChanged(captureActive || duckCount > 0);
+        RaiseIfChanged(captureActive || commCount > 0);
     }
 
     private void RaiseIfChanged(bool engaged)
@@ -357,21 +373,29 @@ public sealed class WindowsAudioSessionMonitor : IAudioSessionMonitor, IDisposab
         return control is not IAudioSessionControl2 control2 || control2.IsSystemSoundsSession() != 0;
     }
 
-    private void OnDuck(string sessionId)
+    // countCommunicationSessions is the OS's authoritative live count of open
+    // communication sessions. Replace (never accumulate) so the render-side signal
+    // self-heals from any earlier missed unduck.
+    private void OnDuck(uint countCommunicationSessions)
     {
         lock (_gate)
         {
-            _duckedSessions.Add(sessionId);
+            _communicationSessionCount = (int)countCommunicationSessions;
         }
 
         RequestRescan();
     }
 
-    private void OnUnduck(string sessionId)
+    // Unduck carries no count; best-effort decrement floored at 0. Any residual drift
+    // is corrected by the next duck's authoritative count or an endpoint change.
+    private void OnUnduck()
     {
         lock (_gate)
         {
-            _duckedSessions.Remove(sessionId);
+            if (_communicationSessionCount > 0)
+            {
+                _communicationSessionCount--;
+            }
         }
 
         RequestRescan();
@@ -404,19 +428,21 @@ public sealed class WindowsAudioSessionMonitor : IAudioSessionMonitor, IDisposab
 
     private sealed class DuckCallback : IAudioVolumeDuckNotification
     {
-        private readonly Action<string> _onDuck;
-        private readonly Action<string> _onUnduck;
+        private readonly Action<uint> _onDuck;
+        private readonly Action _onUnduck;
 
-        internal DuckCallback(Action<string> onDuck, Action<string> onUnduck)
+        internal DuckCallback(Action<uint> onDuck, Action onUnduck)
         {
             _onDuck = onDuck;
             _onUnduck = onUnduck;
         }
 
+        // The session id is not needed: the OS-authoritative countCommunicationSessions
+        // is what drives the render-side signal (research #26 §2), and the boolean
+        // "any comms session open" does not depend on which session it is.
         public void OnVolumeDuckNotification(string? sessionID, uint countCommunicationSessions) =>
-            _onDuck(sessionID ?? string.Empty);
+            _onDuck(countCommunicationSessions);
 
-        public void OnVolumeUnduckNotification(string? sessionID) =>
-            _onUnduck(sessionID ?? string.Empty);
+        public void OnVolumeUnduckNotification(string? sessionID) => _onUnduck();
     }
 }
