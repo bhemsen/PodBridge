@@ -2,13 +2,14 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="About PodBridge"
-        Width="540" Height="620"
-        MinWidth="440" MinHeight="460"
+        Width="540" Height="690"
+        MinWidth="440" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="True"
         ResizeMode="CanResize">
   <Grid Margin="20">
     <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
@@ -41,8 +42,20 @@
     <TextBlock Grid.Row="3" Text="{Binding LicenseLine}" TextWrapping="Wrap"
                Margin="0,0,0,6" />
 
+    <!-- Opt-in auto-start-at-login (default OFF). Reflects and sets the MSIX
+         StartupTask state via IStartupToggle; the hint appears only when Windows
+         (the user or policy) has blocked it, which the app cannot override. -->
+    <StackPanel Grid.Row="4" Margin="0,0,0,12">
+      <CheckBox x:Name="AutoStartCheckBox"
+                Content="Start PodBridge automatically when I sign in"
+                Checked="OnAutoStartChecked" Unchecked="OnAutoStartUnchecked" />
+      <TextBlock x:Name="AutoStartHint" Visibility="Collapsed"
+                 Text="Auto-start is turned off in Windows Settings or Task Manager; change it there."
+                 TextWrapping="Wrap" FontSize="11" Opacity="0.7" Margin="24,4,0,0" />
+    </StackPanel>
+
     <!-- Documentation + project links. -->
-    <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,12">
+    <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,0,0,12">
       <TextBlock>
         <Hyperlink NavigateUri="{Binding DocsUri}" RequestNavigate="OnRequestNavigate">
           User documentation
@@ -57,11 +70,11 @@
     </StackPanel>
 
     <!-- Third-party notices heading. -->
-    <TextBlock Grid.Row="5" Text="Third-party notices" FontWeight="SemiBold"
+    <TextBlock Grid.Row="6" Text="Third-party notices" FontWeight="SemiBold"
                Margin="0,0,0,4" />
 
     <!-- Third-party notices body (from THIRD-PARTY-NOTICES.md), scrollable. -->
-    <Border Grid.Row="6" BorderThickness="1" BorderBrush="#33888888" CornerRadius="4">
+    <Border Grid.Row="7" BorderThickness="1" BorderBrush="#33888888" CornerRadius="4">
       <TextBox Text="{Binding ThirdPartyNotices, Mode=OneWay}"
                IsReadOnly="True" BorderThickness="0" Background="Transparent"
                FontFamily="Consolas" FontSize="11"
@@ -71,7 +84,7 @@
     </Border>
 
     <!-- Close. -->
-    <Button Grid.Row="7" Content="Close" IsCancel="True" IsDefault="True"
+    <Button Grid.Row="8" Content="Close" IsCancel="True" IsDefault="True"
             HorizontalAlignment="Right" MinWidth="88" Padding="12,4"
             Margin="0,12,0,0" Click="OnClose" />
   </Grid>

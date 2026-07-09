@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Media;
+using PodBridge.Core.Startup;
 
 namespace PodBridge.App;
 
@@ -135,7 +136,11 @@ public partial class App : Application
             return;
         }
 
-        _aboutWindow = new AboutWindow(AboutViewModel.Create());
+        // The auto-start toggle reads/sets the MSIX StartupTask via the Windows
+        // adapter resolved from the composition root (default OFF); the branding is
+        // the device-independent Core ProductInfo.
+        var startupToggle = _host!.Services.GetRequiredService<IStartupToggle>();
+        _aboutWindow = new AboutWindow(AboutViewModel.Create(), startupToggle);
         _aboutWindow.Closed += (_, _) => _aboutWindow = null;
         _aboutWindow.Show();
     }
