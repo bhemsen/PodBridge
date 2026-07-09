@@ -23,7 +23,9 @@ public partial class App : Application
     private TrayStatusController? _trayStatusController;
     private TrayBatteryController? _trayBatteryController;
     private TrayAudioController? _trayAudioController;
+    private TrayMicController? _trayMicController;
     private IBleScanner? _bleScanner;
+    private IAudioSessionMonitor? _audioSessionMonitor;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -64,6 +66,7 @@ public partial class App : Application
         _trayStatusController.Start();
 
         StartTelemetryPipeline();
+        StartMicPolicyPipeline();
     }
 
     // Wires and starts the Phase-2 connection-gated Tier-1 pipeline
@@ -89,6 +92,26 @@ public partial class App : Application
         _bleScanner.Start();
     }
 
+    // Wires and starts the Phase-4 mic-profile policy on the background host so
+    // Auto-switch reacts live to comms-capture sessions. Resolve the engine FIRST so its
+    // subscription to the IAudioSessionMonitor is live before the monitor starts (no
+    // comms event missed); the tray controller then restores the persisted mode and
+    // reflects the degrade warning. The container owns the engine's and monitor's
+    // lifetime; the composition root starts and stops the monitor (the engine, like the
+    // tracker with the scanner, does not own it).
+    private void StartMicPolicyPipeline()
+    {
+        var services = _host!.Services;
+
+        var engine = services.GetRequiredService<MicPolicyEngine>();
+        _trayMicController = TrayMicController.Create(
+            _trayIcon!, engine, new MicPolicyModeStore(), Dispatcher);
+        _trayMicController.Start();
+
+        _audioSessionMonitor = services.GetRequiredService<IAudioSessionMonitor>();
+        _audioSessionMonitor.Start();
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         // Unsubscribe the tray controllers first so no late StateChanged/StatusChanged
@@ -99,6 +122,11 @@ public partial class App : Application
         _trayAudioController?.Dispose();
         _trayAudioController = null;
 
+        // Unsubscribe the mic-policy controller before its engine (a container singleton)
+        // is disposed, so no late warning event touches a disposed tray.
+        _trayMicController?.Dispose();
+        _trayMicController = null;
+
         _trayStatusController?.Dispose();
         _trayStatusController = null;
 
@@ -106,6 +134,11 @@ public partial class App : Application
         // container still disposes the scanner (and the rest of the pipeline) below.
         _bleScanner?.Stop();
         _bleScanner = null;
+
+        // Stop the comms-session monitor so no capture event drives the mic-policy
+        // engine during teardown; the container still disposes the monitor and engine.
+        _audioSessionMonitor?.Stop();
+        _audioSessionMonitor = null;
 
         _trayIcon?.Dispose();
         _trayIcon = null;

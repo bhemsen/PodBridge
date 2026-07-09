@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
+using PodBridge.Core.Audio;
 
 namespace PodBridge.App;
 
@@ -17,10 +18,15 @@ namespace PodBridge.App;
 /// <see cref="TrayBatteryController"/> (<see cref="SetBattery"/>); the codec and
 /// mic-mode lines from the read-only audio reader via <see cref="TrayAudioController"/>
 /// (<see cref="SetCodec"/>/<see cref="SetMicMode"/>, with the on-demand read wired via
-/// <see cref="SetRefreshAudioHandler"/>). The tooltip stays concise (status + battery
-/// only); the audio surface lives in the menu. First-run pairing guidance and the
-/// SBC guidance are surfaced through <see cref="ShowNotification"/>. Disposing removes
-/// the icon from the notification area. Must be used on the UI thread.
+/// <see cref="SetRefreshAudioHandler"/>). A "Microphone mode" submenu exposes the three
+/// mic-profile policy modes (HiFi-lock / Auto-switch / Call-mode) as a radio group plus
+/// a Call-mode toggle and the honest single-device degrade warning line, driven by
+/// <see cref="TrayMicController"/> (<see cref="SetMicPolicyHandlers"/>,
+/// <see cref="SetSelectedMicMode"/>, <see cref="SetCallModeActive"/>,
+/// <see cref="SetMicWarning"/>). The tooltip stays concise (status + battery only); the
+/// audio surface lives in the menu. First-run pairing guidance and the SBC guidance are
+/// surfaced through <see cref="ShowNotification"/>. Disposing removes the icon from the
+/// notification area. Must be used on the UI thread.
 /// </summary>
 public sealed class TrayIcon : IDisposable
 {
@@ -32,10 +38,18 @@ public sealed class TrayIcon : IDisposable
     private readonly MenuItem _batteryItem;
     private readonly MenuItem _codecItem;
     private readonly MenuItem _micItem;
+    private readonly MenuItem _micPolicyMenu;
+    private readonly MenuItem _hifiLockItem;
+    private readonly MenuItem _autoSwitchItem;
+    private readonly MenuItem _callModeModeItem;
+    private readonly MenuItem _callModeToggleItem;
+    private readonly MenuItem _micWarningItem;
 
     private string _statusText = Placeholder;
     private string _batteryText = Placeholder;
     private Action? _refreshAudioHandler;
+    private Action<MicPolicyMode>? _micModeHandler;
+    private Action? _callModeToggleHandler;
 
     private TrayIcon()
     {
@@ -43,6 +57,13 @@ public sealed class TrayIcon : IDisposable
         _batteryItem = new MenuItem { Header = $"Battery: {Placeholder}", IsEnabled = false };
         _codecItem = new MenuItem { Header = $"Codec: {Placeholder}", IsEnabled = false };
         _micItem = new MenuItem { Header = $"Mic: {Placeholder}", IsEnabled = false };
+        _hifiLockItem = CreateMicModeItem("HiFi-lock", MicPolicyMode.HiFiLock);
+        _autoSwitchItem = CreateMicModeItem("Auto-switch", MicPolicyMode.AutoSwitch);
+        _callModeModeItem = CreateMicModeItem("Call-mode", MicPolicyMode.CallMode);
+        _callModeToggleItem = new MenuItem { Header = "AirPods mic (Call-mode)", IsCheckable = true };
+        _callModeToggleItem.Click += OnCallModeToggle;
+        _micWarningItem = new MenuItem { IsEnabled = false, Visibility = Visibility.Collapsed };
+        _micPolicyMenu = BuildMicPolicyMenu();
         _icon = new TaskbarIcon
         {
             ToolTipText = "PodBridge",
@@ -101,6 +122,45 @@ public sealed class TrayIcon : IDisposable
     public void SetRefreshAudioHandler(Action handler) => _refreshAudioHandler = handler;
 
     /// <summary>
+    /// Wires the mic-policy submenu actions: <paramref name="onModeSelected"/> fires
+    /// with the picked mode, <paramref name="onCallModeToggled"/> when the Call-mode
+    /// toggle is clicked. Call on the UI thread.
+    /// </summary>
+    public void SetMicPolicyHandlers(Action<MicPolicyMode> onModeSelected, Action onCallModeToggled)
+    {
+        _micModeHandler = onModeSelected;
+        _callModeToggleHandler = onCallModeToggled;
+    }
+
+    /// <summary>
+    /// Checks exactly the submenu item for <paramref name="mode"/> (radio behaviour), so
+    /// the menu always reflects the engine's current mode. Call on the UI thread.
+    /// </summary>
+    public void SetSelectedMicMode(MicPolicyMode mode)
+    {
+        _hifiLockItem.IsChecked = mode == MicPolicyMode.HiFiLock;
+        _autoSwitchItem.IsChecked = mode == MicPolicyMode.AutoSwitch;
+        _callModeModeItem.IsChecked = mode == MicPolicyMode.CallMode;
+    }
+
+    /// <summary>
+    /// Reflects the Call-mode toggle (whether the AirPods currently hold the
+    /// communications role) as the toggle item's check. Call on the UI thread.
+    /// </summary>
+    public void SetCallModeActive(bool active) => _callModeToggleItem.IsChecked = active;
+
+    /// <summary>
+    /// Shows or hides the honest single-device degrade warning line with
+    /// <paramref name="warningText"/> (e.g. "no alternate mic — AirPods mic requires
+    /// HFP/mono"). Call on the UI thread.
+    /// </summary>
+    public void SetMicWarning(bool degraded, string warningText)
+    {
+        _micWarningItem.Header = warningText;
+        _micWarningItem.Visibility = degraded ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
     /// Shows a Windows balloon/toast notification from the tray icon. Used for
     /// one-time first-run pairing guidance and the confirmed-SBC audio guidance. Call
     /// on the UI thread.
@@ -124,6 +184,7 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(_codecItem);
         menu.Items.Add(_micItem);
         menu.Items.Add(new Separator());
+        menu.Items.Add(_micPolicyMenu);
         menu.Items.Add(CreateItem("Refresh audio status", OnRefreshAudio));
         // Phase 1: "Pair / Reconnect" deep-links to Bluetooth settings like
         // "Open Bluetooth settings"; issue #7 gives it live reconnect behaviour.
@@ -140,6 +201,34 @@ public sealed class TrayIcon : IDisposable
         item.Click += onClick;
         return item;
     }
+
+    // The "Microphone mode" submenu: three checkable modes (radio), a Call-mode toggle,
+    // and a collapsed degrade-warning line the controller reveals when there is no
+    // non-AirPods fallback mic.
+    private MenuItem BuildMicPolicyMenu()
+    {
+        var menu = new MenuItem { Header = "Microphone mode" };
+        menu.Items.Add(_hifiLockItem);
+        menu.Items.Add(_autoSwitchItem);
+        menu.Items.Add(_callModeModeItem);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(_callModeToggleItem);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(_micWarningItem);
+        return menu;
+    }
+
+    private MenuItem CreateMicModeItem(string header, MicPolicyMode mode)
+    {
+        var item = new MenuItem { Header = header, IsCheckable = true };
+        // The controller re-asserts the checks from the engine's current mode, so a
+        // click on the already-checked item can never leave the radio group empty.
+        item.Click += (_, _) => _micModeHandler?.Invoke(mode);
+        return item;
+    }
+
+    private void OnCallModeToggle(object sender, RoutedEventArgs e)
+        => _callModeToggleHandler?.Invoke();
 
     private void OnRefreshAudio(object sender, RoutedEventArgs e)
         => _refreshAudioHandler?.Invoke();
