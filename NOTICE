@@ -1,0 +1,40 @@
+PodBridge
+Copyright 2026 PodBridge contributors
+
+This product includes software developed as part of the PodBridge project
+(https://github.com/bhemsen/PodBridge).
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this project except in compliance with the License. You may obtain a copy of
+the License in the LICENSE file at the root of this repository or at
+http://www.apache.org/licenses/LICENSE-2.0.
+
+================================================================================
+Trademark / not-affiliated notice
+================================================================================
+
+PodBridge is an open-source companion for AirPods on Windows. It is NOT
+affiliated with, authorized, sponsored, or endorsed by Apple Inc. "AirPods" and
+"Apple" are trademarks of Apple Inc., used here only descriptively to identify
+the hardware this software interoperates with. PodBridge uses no Apple logo and
+makes no claim of Apple affiliation. PodBridge does not claim Apple-identical
+sound quality.
+
+================================================================================
+Clean-room confirmation
+================================================================================
+
+The Apple Accessory Protocol (AAP) support in PodBridge is a clean-room
+reimplementation built solely from publicly documented facts (PSM values,
+opcodes, and packet-field descriptions). No source code from any GPL-licensed or
+otherwise license-incompatible project, and no verbatim protocol-documentation
+prose, has been copied into this repository. The governing clean-room rule lives
+in docs/constitution.md; the evidence harvest is in docs/prior-art.md. MagicPairing
+encryption is never defeated — only the cleartext AAP control channel is used.
+
+================================================================================
+Third-party software
+================================================================================
+
+This product depends on third-party packages distributed under their own
+licenses. See THIRD-PARTY-NOTICES.md for the enumerated list and license terms.
