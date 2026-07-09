@@ -8,8 +8,8 @@
 
 | Component | Responsibility |
 | --------- | -------------- |
-| `PodBridge.Core` | Platform-neutral domain: AAP protocol module, Apple-Continuity BLE parser (`ContinuityParser` → `BleAdvertisement` in, `DeviceState` battery/charging/in-ear out), the connection-gated telemetry pipeline (`IDeviceStateProvider`/`DeviceStateTracker`), the auto play/pause engine (`AutoPlayPauseEngine`), noise-control models, mic-policy engine, and the OS-boundary interfaces (`IBleScanner`, `IConnectionMonitor`, `IMediaController`, `IAudioPolicy`, `IAudioSessionMonitor`, `IAapTransport`). No OS/UI/P-Invoke. |
-| `PodBridge.Windows` | Windows adapters implementing the Core interfaces: `WinRtBleScanner` (BLE advertisement watcher), `WinRtConnectionMonitor` (WinRT paired/connected detection), `WindowsMediaController` (GSMTC media-session pause/resume), `WindowsAudioPolicy` (NAudio + `IPolicyConfig`), `WindowsAudioSessionMonitor` (`IAudioSessionManager2`), and — Tier 2 only — `DriverAapTransport` (talks to the KMDF driver). |
+| `PodBridge.Core` | Platform-neutral domain: AAP protocol module, Apple-Continuity BLE parser (`ContinuityParser` → `BleAdvertisement` in, `DeviceState` battery/charging/in-ear out), the connection-gated telemetry pipeline (`IDeviceStateProvider`/`DeviceStateTracker`), the auto play/pause engine (`AutoPlayPauseEngine`), the read-only audio-state surface (`IAudioStateReader` → `AudioState`(`CodecKind`, `MicMode`) + `AudioGuidanceEngine`), noise-control models, mic-policy engine, and the OS-boundary interfaces (`IBleScanner`, `IConnectionMonitor`, `IMediaController`, `IAudioStateReader`, `IAudioPolicy`, `IAudioSessionMonitor`, `IAapTransport`). No OS/UI/P-Invoke. |
+| `PodBridge.Windows` | Windows adapters implementing the Core interfaces: `WinRtBleScanner` (BLE advertisement watcher), `WinRtConnectionMonitor` (WinRT paired/connected detection), `WindowsMediaController` (GSMTC media-session pause/resume), `WindowsAudioStateReader` (read-only Core Audio codec + mic-mode read), `WindowsAudioPolicy` (NAudio + `IPolicyConfig`), `WindowsAudioSessionMonitor` (`IAudioSessionManager2`), and — Tier 2 only — `DriverAapTransport` (talks to the KMDF driver). |
 | `PodBridge.App` | WPF tray-first UI, view models, notifications, settings, and the composition root (DI, background host). |
 | `driver/PodBridgeAAP` | Optional C / KMDF L2CAP-bridge driver exposing a user-mode device interface for AAP over PSM 0x1001. Ships separately. |
 | `tests/PodBridge.Core.Tests` | xUnit tests exercising Core via fakes — no physical device required. |
@@ -47,8 +47,18 @@
    Communications capture session opening → Core's policy engine decides per the
    active mode (HiFi-lock / auto-switch / call-mode) → `WindowsAudioPolicy`
    sets the default vs communications endpoint per role → restores on release.
-3. **Codec transparency (Tier 1):** on connect, `WindowsAudioPolicy` reads the
-   negotiated codec / active mic mode → `App` surfaces AAC vs SBC and advice.
+3. **Codec transparency (Tier 1, read-only):** on connect (and on a manual
+   refresh), `WindowsAudioStateReader` (`IAudioStateReader`) reads an `AudioState`
+   → Core's `AudioGuidanceEngine` maps it to honest display + advice text → `App`
+   surfaces codec + mic-mode lines and an AAC-guidance notification only on
+   confirmed SBC. This reader is **read-only** and deliberately separate from
+   Phase 4's `IAudioPolicy` (which switches endpoints). Driver-free and
+   admin-free: the negotiated codec is reported as `CodecKind.Unknown` because the
+   only driver-free codec read (ETW `BthA2dp` provider) requires elevation, which
+   Tier 1's `asInvoker` forbids (docs/research/codec-detection.md); the mic mode is
+   inferred read-only from an active capture session on the AirPods mic endpoint
+   via `IAudioSessionManager2`, never opening a stream on the mic
+   (docs/research/mic-mode-detection.md).
 4. **Noise-control / gesture (Tier 2, opt-in):** `App` command → Core
    `AapProtocol` builds the packet → `DriverAapTransport` writes it over L2CAP via
    the driver → AirPods echo confirms → `DeviceState` updated. Driver absent →

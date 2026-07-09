@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Media;
 
@@ -9,15 +10,17 @@ namespace PodBridge.Windows;
 /// <c>PodBridge.Core</c>'s OS-boundary interfaces. The composition root in
 /// <c>PodBridge.App</c> calls this so feature code never references concrete
 /// adapters. Phase 1 registers the connection monitor; Phase 2 adds the BLE
-/// advertisement scanner and the media-session controller.
+/// advertisement scanner and the media-session controller; Phase 3 adds the
+/// read-only audio-state reader.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Binds Core OS-boundary interfaces to their Windows implementations. All are
-    /// singletons: they hold live WinRT handles / subscriptions that must survive
-    /// for the app's lifetime, and the container disposes them (IDisposable) on host
-    /// shutdown.
+    /// Binds Core OS-boundary interfaces to their Windows implementations. The
+    /// subscription-holding adapters are singletons: they hold live WinRT handles /
+    /// subscriptions that must survive for the app's lifetime, and the container
+    /// disposes them (IDisposable) on host shutdown. Stateless, per-call adapters
+    /// (the audio-state reader) are transient.
     /// </summary>
     public static IServiceCollection AddWindowsAdapters(this IServiceCollection services)
     {
@@ -30,6 +33,11 @@ public static class ServiceCollectionExtensions
         // the controller owns the GSMTC session manager. One instance each.
         services.AddSingleton<IBleScanner, WinRtBleScanner>();
         services.AddSingleton<IMediaController, WindowsMediaController>();
+
+        // The audio-state reader holds no subscription or handle between calls — it
+        // creates and releases short-lived Core Audio COM objects per Read() — so it
+        // needs no shared lifetime and is registered transient (no IDisposable).
+        services.AddTransient<IAudioStateReader, WindowsAudioStateReader>();
         return services;
     }
 }
