@@ -106,8 +106,8 @@ milestone. A completed spec is moved to `docs/specs/archive/`.
 | The WinRT connection-detection unit of work is **research-intensive** → split into a `chore:research-connection-detection` issue (WinRT paired/connected API + reliability across Windows 11 builds) plus an implementation issue that `Depends on` it | Contract pre-classifies Windows BLE/device-API confirmation as research-intensive; the risk table flags cross-build variance | 2026-07-09 |
 | The not-affiliated disclaimer / About surface ships in **Phase 5** (packaging) | Constitution requires the disclaimer, but Phase 1 is tray-only with no About/settings window; Phase 5 owns the user-facing surface | 2026-07-09 |
 | `asInvoker` manifest (no elevation) | Constitution: Tier 1 needs no admin | 2026-07-09 |
-| OPEN — first-run/onboarding UX depth: tray + notifications only, or a minimal onboarding window? | resolved at the spec-acceptance gate | — |
-| OPEN — auto-start at Windows login in Phase 1, or defer to packaging (Phase 5)? | resolved at the spec-acceptance gate | — |
+| First-run/onboarding UX is **tray + Windows notifications only** (no separate onboarding window) | Leanest, fits low-invasiveness; the full settings/About window is Phase 5 | 2026-07-09 |
+| Auto-start at Windows login is **deferred to Phase 5 (packaging)** | The installer/MSIX owns start-at-login (with an on/off option); Phase 1 stays focused | 2026-07-09 |
 
 ## Tracking
 
@@ -164,3 +164,6 @@ The decomposition into steps lives as GitHub issues, not here.
   not-affiliated disclaimer a home (Phase 5), and noted the `IConnectionMonitor`
   /`WinRtConnectionMonitor` architecture addition (recorded in
   `docs/architecture.md` when implemented).
+- 2026-07-09: Spec-acceptance gate passed. Both open decisions resolved —
+  onboarding is tray + notifications only (no window); auto-start deferred to
+  Phase 5. Human prerequisites: none. Spec accepted; PR #1 merged.
