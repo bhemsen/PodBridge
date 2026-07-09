@@ -8,7 +8,7 @@
 
 | Component | Responsibility |
 | --------- | -------------- |
-| `PodBridge.Core` | Platform-neutral domain: AAP protocol module, Apple-Continuity BLE parser (`ContinuityParser` → `BleAdvertisement` in, `DeviceState` battery/charging/in-ear out), the connection-gated telemetry pipeline (`IDeviceStateProvider`/`DeviceStateTracker`), the auto play/pause engine (`AutoPlayPauseEngine`), the read-only audio-state surface (`IAudioStateReader` → `AudioState`(`CodecKind`, `MicMode`) + `AudioGuidanceEngine`), noise-control models, mic-policy engine, the branding/disclaimer/license constants (`Branding/ProductInfo` — coined name, "for AirPods" descriptor, not-affiliated disclaimer, Apache-2.0 id, honest audio note, docs link; guarded by the Tier-1 `ProductInfoTests`), the opt-in auto-start toggle contract (`Startup/IStartupToggle` → `StartupToggleState`; default OFF, guarded by the Tier-1 `StartupToggleTests`), and the OS-boundary interfaces (`IBleScanner`, `IConnectionMonitor`, `IMediaController`, `IAudioStateReader`, `IAudioPolicy`, `IAudioSessionMonitor`, `IStartupToggle`, `IAapTransport`). No OS/UI/P-Invoke. |
+| `PodBridge.Core` | Platform-neutral domain: the clean-room AAP noise-control module (`AapProtocol` frame builders + notification parser and `NoiseControlController` optimistic-set/echo-confirm/timeout-revert logic over `IAapTransport`, with `DeviceState.NoiseControl`/`NoiseControlAvailable` and `NoiseControlMode`), Apple-Continuity BLE parser (`ContinuityParser` → `BleAdvertisement` in, `DeviceState` battery/charging/in-ear out), the connection-gated telemetry pipeline (`IDeviceStateProvider`/`DeviceStateTracker`), the auto play/pause engine (`AutoPlayPauseEngine`), the read-only audio-state surface (`IAudioStateReader` → `AudioState`(`CodecKind`, `MicMode`) + `AudioGuidanceEngine`), mic-policy engine, the branding/disclaimer/license constants (`Branding/ProductInfo` — coined name, "for AirPods" descriptor, not-affiliated disclaimer, Apache-2.0 id, honest audio note, docs link; guarded by the Tier-1 `ProductInfoTests`), the opt-in auto-start toggle contract (`Startup/IStartupToggle` → `StartupToggleState`; default OFF, guarded by the Tier-1 `StartupToggleTests`), and the OS-boundary interfaces (`IBleScanner`, `IConnectionMonitor`, `IMediaController`, `IAudioStateReader`, `IAudioPolicy`, `IAudioSessionMonitor`, `IStartupToggle`, `IAapTransport`). No OS/UI/P-Invoke. |
 | `PodBridge.Windows` | Windows adapters implementing the Core interfaces: `WinRtBleScanner` (BLE advertisement watcher), `WinRtConnectionMonitor` (WinRT paired/connected detection), `WindowsMediaController` (GSMTC media-session pause/resume), `WindowsAudioStateReader` (read-only Core Audio codec + mic-mode read), `WindowsAudioPolicy` (NAudio + `IPolicyConfig`), `WindowsAudioSessionMonitor` (`IAudioSessionManager2`), `StartupTaskToggle` (opt-in auto-start over the MSIX `StartupTask` WinRT API, default OFF), and — Tier 2 only — `DriverAapTransport` (talks to the KMDF driver). |
 | `PodBridge.App` | WPF tray-first UI, view models, notifications, settings, and the composition root (DI, background host). Includes the **About window** (`AboutWindow` + `AboutViewModel`) — the app's first non-tray window, opened from the tray "About" entry, which renders the Core `ProductInfo` branding/disclaimer/license/audio constants plus the running app version and the shipped `THIRD-PARTY-NOTICES.md`, and carries the **opt-in auto-start-at-login toggle** (default OFF) that reads/sets `IStartupToggle`. |
 | `driver/PodBridgeAAP` | Optional C / KMDF L2CAP-bridge driver exposing a user-mode device interface for AAP over PSM 0x1001. Ships separately. |
@@ -60,10 +60,15 @@
    inferred read-only from an active capture session on the AirPods mic endpoint
    via `IAudioSessionManager2`, never opening a stream on the mic
    (docs/research/mic-mode-detection.md).
-4. **Noise-control / gesture (Tier 2, opt-in):** `App` command → Core
-   `AapProtocol` builds the packet → `DriverAapTransport` writes it over L2CAP via
-   the driver → AirPods echo confirms → `DeviceState` updated. Driver absent →
-   the feature is disabled in the UI.
+4. **Noise-control / gesture (Tier 2, opt-in):** `App` command →
+   `NoiseControlController` optimistically applies the mode and asks `AapProtocol`
+   to build the packet → `DriverAapTransport` writes it over L2CAP via the driver →
+   the AirPods echo notification is parsed by `AapProtocol` and confirms (or a
+   timeout/mismatch reverts) → `DeviceState` updated. Driver absent → the transport
+   reports `IsAvailable == false`, `ApplyTo` disables the feature in the UI, and no
+   packet is sent. **Implemented in Core** (`AapProtocol`, `NoiseControlController`,
+   `IAapTransport`; issue #41, unit-tested via a fake transport); the
+   `DriverAapTransport`/driver side and the tray UI are the remaining Tier-2 work.
 5. **Connection detection (Tier 1, driver-free):** `WinRtConnectionMonitor`
    watches paired Bluetooth-Classic association endpoints and holds a
    `BluetoothDevice` per matched AirPods (name heuristic) for its

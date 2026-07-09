@@ -42,6 +42,22 @@ public sealed record DeviceState
     public AirPodsModel Model { get; init; } = AirPodsModel.Unknown;
 
     /// <summary>
+    /// The current AAP noise-control mode, or <see langword="null"/> when unknown /
+    /// not yet read. Only meaningful while <see cref="NoiseControlAvailable"/> is
+    /// <see langword="true"/>; it is delivered over the optional Tier-2 transport, not
+    /// the Tier-1 BLE advertisement path.
+    /// </summary>
+    public NoiseControlMode? NoiseControl { get; init; }
+
+    /// <summary>
+    /// <see langword="true"/> only when the optional Tier-2 AAP transport is available
+    /// and its channel is open, so noise-control switching can be offered. Defaults to
+    /// <see langword="false"/> in the driver-free Tier-1 build — the UI then disables
+    /// switching with an honest explanation (constitution: graceful degradation).
+    /// </summary>
+    public bool NoiseControlAvailable { get; init; }
+
+    /// <summary>
     /// True when this snapshot carries fresh, connection-gated telemetry. When
     /// false, the device is disconnected or out of range and the battery/in-ear
     /// fields carry no live meaning — the tray shows "unknown / out of range".
