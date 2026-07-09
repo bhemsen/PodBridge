@@ -51,8 +51,17 @@ jobs:
       - name: Build MSIX (.wapproj) via MSBuild
         shell: pwsh
         run: |
+          # Target the newest UAP platform SDK actually installed on the runner
+          # (the image may not carry the app's exact 10.0.22621.0 UAP SDK); the
+          # package min-OS stays at the manifest's value.
+          $uapRoot = 'C:\Program Files (x86)\Windows Kits\10\Platforms\UAP'
+          $platforms = @(Get-ChildItem $uapRoot -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
+          Write-Host "Installed UAP platform SDKs: $($platforms -join ', ')"
+          $tpv = $platforms | Sort-Object { [version]$_ } -Descending | Select-Object -First 1
+          if (-not $tpv) { Write-Error 'No UAP platform SDK on this runner; .wapproj cannot build headlessly.'; exit 1 }
+          Write-Host "Using TargetPlatformVersion=$tpv"
           $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\msix\'
-          msbuild packaging/PodBridge.Package/PodBridge.Package.wapproj /restore /p:Configuration=Release /p:Platform=x64 /p:UapAppxPackageBuildMode=SideLoadOnly /p:AppxBundle=Never /p:AppxPackageSigningEnabled=false /p:GenerateTemporaryStoreCertificate=false /p:AppxPackageDir="$out"
+          msbuild packaging/PodBridge.Package/PodBridge.Package.wapproj /restore /p:Configuration=Release /p:Platform=x64 /p:TargetPlatformVersion=$tpv /p:UapAppxPackageBuildMode=SideLoadOnly /p:AppxBundle=Never /p:AppxPackageSigningEnabled=false /p:GenerateTemporaryStoreCertificate=false /p:AppxPackageDir="$out"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Locate the produced MSIX
