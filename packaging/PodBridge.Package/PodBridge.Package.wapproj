@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Windows Application Packaging Project (.wapproj) that wraps PodBridge.App into
+  a signed MSIX. This is the officially-documented WPF packaging path
+  (docs/research/msix-packaging.md, sources 1 & 7); single-project MSIX
+  (EnableMsixTooling) is WinUI-3-only and emits no package for a plain WPF
+  Microsoft.NET.Sdk app, so it is not usable here.
+
+  Built by MSBuild (NOT `dotnet`) - it is deliberately kept out of
+  PodBridge.slnx so the dotnet-based Verify gate stays green. The packaging.yml
+  workflow builds + signs it on windows-latest.
+
+  App-only: the sole ProjectReference is PodBridge.App; no kernel driver is
+  packaged (the Tier-2 KMDF driver ships as a separate Phase-6 installer).
+-->
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <AppxBundle>Never</AppxBundle>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <AppxBundle>Never</AppxBundle>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <WapProjPath Condition="'$(WapProjPath)' == ''">$(MSBuildExtensionsPath)\Microsoft\DesktopBridge\</WapProjPath>
+  </PropertyGroup>
+  <Import Project="$(WapProjPath)\Microsoft.DesktopBridge.props" />
+
+  <PropertyGroup>
+    <ProjectGuid>B7E4F2A1-3C6D-4E8B-9A0F-1D2C3B4A5E6F</ProjectGuid>
+    <!-- This is a packaging project, not a Core compilation unit: the repo-root
+         Directory.Build.props warnings-as-errors (a Core rule) must not escalate
+         the benign NuGet fallback warning NU1701 - raised because the UAP-targeted
+         .wapproj restore graph sees the WPF-only H.NotifyIcon.Wpf package - into a
+         build failure. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
+    <!-- UAP SDK to build against. CI passes PbUapSdk (the newest UAP SDK actually
+         installed on the runner) via a CUSTOM global property so it never leaks
+         into the referenced .NET SDK projects; TargetPlatformVersion is assigned
+         LOCALLY here, so it does not propagate to project references. Falls back
+         to the app's min for local/VS builds. Min stays at the app's floor. -->
+    <TargetPlatformVersion Condition="'$(PbUapSdk)' != ''">$(PbUapSdk)</TargetPlatformVersion>
+    <TargetPlatformVersion Condition="'$(PbUapSdk)' == ''">10.0.22621.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.22621.0</TargetPlatformMinVersion>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <EntryPointProjectUniqueName>..\..\src\PodBridge.App\PodBridge.App.csproj</EntryPointProjectUniqueName>
+    <!-- Signing is done post-build by signtool with the in-workflow self-signed
+         cert (packaging.yml); keep MSBuild signing off. -->
+    <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
+    <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+    <AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
+    <AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
+    <GenerateTemporaryStoreCertificate>False</GenerateTemporaryStoreCertificate>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Images\**\*.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PodBridge.App\PodBridge.App.csproj" />
+  </ItemGroup>
+
+  <Import Project="$(WapProjPath)\Microsoft.DesktopBridge.targets" />
+
+</Project>

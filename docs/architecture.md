@@ -12,6 +12,7 @@
 | `PodBridge.Windows` | Windows adapters implementing the Core interfaces: `WinRtBleScanner` (BLE advertisement watcher), `WinRtConnectionMonitor` (WinRT paired/connected detection), `WindowsMediaController` (GSMTC media-session pause/resume), `WindowsAudioStateReader` (read-only Core Audio codec + mic-mode read), `WindowsAudioPolicy` (NAudio + `IPolicyConfig`), `WindowsAudioSessionMonitor` (`IAudioSessionManager2`), and — Tier 2 only — `DriverAapTransport` (talks to the KMDF driver). |
 | `PodBridge.App` | WPF tray-first UI, view models, notifications, settings, and the composition root (DI, background host). |
 | `driver/PodBridgeAAP` | Optional C / KMDF L2CAP-bridge driver exposing a user-mode device interface for AAP over PSM 0x1001. Ships separately. |
+| `packaging/PodBridge.Package` | Windows Application Packaging Project (`.wapproj`) that wraps `PodBridge.App` into a **signed MSIX** (app-only — no driver). Built by **MSBuild** on `windows-latest` (the `Package (MSIX)` workflow), deliberately kept **out of `PodBridge.slnx`** so the dotnet-based Verify gate is unaffected. Ships `Package.appxmanifest` (coined name "PodBridge", `runFullTrust`+`bluetooth` capabilities, `Windows.FullTrustApplication` = unelevated) and placeholder logos under `Images/`. |
 | `tests/PodBridge.Core.Tests` | xUnit tests exercising Core via fakes — no physical device required. |
 
 ## Boundaries
@@ -80,3 +81,6 @@
 - Device-independent logic and its tests → `PodBridge.Core` / `PodBridge.Core.Tests`.
 - Anything needing the L2CAP channel (ANC, gestures) → the Tier-2 path
   (`DriverAapTransport` + driver), never the Tier-1 default.
+- Packaging/distribution (MSIX manifest, capabilities, logos) →
+  `packaging/PodBridge.Package` (the `.wapproj`); built by MSBuild in the
+  `Package (MSIX)` workflow, never added to `PodBridge.slnx`.

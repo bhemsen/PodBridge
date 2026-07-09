@@ -6,6 +6,11 @@
     <RootNamespace>PodBridge.App</RootNamespace>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- AnyCPU keeps the dotnet-based Verify (slnx) build green; x64/win-x64 let
+         the MSIX packaging project (packaging/PodBridge.Package) publish the app
+         for the package. asInvoker is unchanged (app.manifest). -->
+    <Platforms>AnyCPU;x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>

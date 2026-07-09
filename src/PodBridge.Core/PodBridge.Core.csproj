@@ -3,6 +3,10 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>PodBridge.Core</RootNamespace>
+    <!-- Restore metadata only: lets the MSIX packaging project (which publishes
+         the app for win-x64) resolve this transitive reference. No OS coupling -
+         Core stays platform-neutral; a plain (RID-less) build is unaffected. -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
 </Project>
