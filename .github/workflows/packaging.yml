@@ -168,11 +168,19 @@ jobs:
           $tag = $env:GITHUB_REF_NAME
           $msix = '${{ steps.find.outputs.msix }}'
           $cer = '${{ steps.cert.outputs.cer }}'
+          # A downloaded asset keeps its on-disk basename; the `#label` suffix is
+          # only a cosmetic display label (gh release create), NOT the filename.
+          # The .wapproj emits `PodBridgeContributors.PodBridge_*_x64.msix`, but
+          # the install docs tell users to run `Add-AppxPackage -Path
+          # .\PodBridge-<tag>.msix`. Copy to that exact name so the documented
+          # command resolves. (The .cer's on-disk name already matches its label.)
+          $msixAsset = Join-Path $env:RUNNER_TEMP "PodBridge-$tag.msix"
+          Copy-Item -LiteralPath $msix -Destination $msixAsset -Force
           $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
           $template = Get-Content -LiteralPath 'packaging/release-notes.template.md' -Raw
           $template.Replace('__TAG__', $tag) | Set-Content -LiteralPath $notes -Encoding utf8
           gh release create $tag `
-            "$msix#PodBridge-$tag.msix" `
+            $msixAsset `
             "$cer#PodBridge-SelfSigned.cer" `
             --title "PodBridge $tag" `
             --notes-file $notes `
