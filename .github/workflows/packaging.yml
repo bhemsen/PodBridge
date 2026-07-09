@@ -1,0 +1,103 @@
+name: Package (MSIX)
+
+# Builds PodBridge.App into a signed MSIX on windows-latest and publishes it as a
+# workflow artifact. This is separate from the dotnet-based Verify gate (ci.yml):
+# the MSIX is produced from a Windows Application Packaging Project (.wapproj),
+# which only MSBuild can build, so it is intentionally kept out of PodBridge.slnx.
+#
+# Signing uses a self-signed, throwaway certificate generated in-workflow (its
+# Subject matches the manifest Publisher "CN=PodBridge (Self-Signed CI)"). The
+# Store-signed, no-admin channel uses a Partner-Center-derived identity applied
+# later at Store association (#38); this workflow does not need any secret.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore app for win-x64
+        run: dotnet restore src/PodBridge.App/PodBridge.App.csproj -r win-x64
+
+      - name: Generate self-signed signing certificate
+        id: cert
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate `
+            -Type Custom `
+            -Subject 'CN=PodBridge (Self-Signed CI)' `
+            -KeyUsage DigitalSignature `
+            -FriendlyName 'PodBridge CI throwaway' `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}Subject Type:End Entity')
+          $cer = Join-Path $env:RUNNER_TEMP 'PodBridge-SelfSigned.cer'
+          Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+          "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
+          "cer=$cer" >> $env:GITHUB_OUTPUT
+
+      - name: Build MSIX (.wapproj) via MSBuild
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\msix\'
+          msbuild packaging/PodBridge.Package/PodBridge.Package.wapproj /restore /p:Configuration=Release /p:Platform=x64 /p:UapAppxPackageBuildMode=SideLoadOnly /p:AppxBundle=Never /p:AppxPackageSigningEnabled=false /p:GenerateTemporaryStoreCertificate=false /p:AppxPackageDir="$out"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Locate the produced MSIX
+        id: find
+        shell: pwsh
+        run: |
+          $msix = Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE 'artifacts\msix') -Recurse -Filter *.msix | Select-Object -First 1
+          if (-not $msix) { Write-Error 'No .msix was produced by the packaging build.'; exit 1 }
+          Write-Host "Produced: $($msix.FullName)"
+          "msix=$($msix.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Locate Windows SDK tools
+        id: sdk
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' | Sort-Object FullName -Descending | Select-Object -First 1
+          $makeappx = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\makeappx.exe' | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { Write-Error 'signtool.exe not found'; exit 1 }
+          if (-not $makeappx) { Write-Error 'makeappx.exe not found'; exit 1 }
+          "signtool=$($signtool.FullName)" >> $env:GITHUB_OUTPUT
+          "makeappx=$($makeappx.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Sign the MSIX (self-signed, throwaway)
+        shell: pwsh
+        run: |
+          & '${{ steps.sdk.outputs.signtool }}' sign /fd SHA256 /sha1 '${{ steps.cert.outputs.thumbprint }}' '${{ steps.find.outputs.msix }}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '${{ steps.sdk.outputs.signtool }}' verify /pa '${{ steps.find.outputs.msix }}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Assert app-only (no kernel driver in the package)
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'msix-unpack'
+          & '${{ steps.sdk.outputs.makeappx }}' unpack /p '${{ steps.find.outputs.msix }}' /d $dest /o
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $sys = Get-ChildItem -Path $dest -Recurse -Include *.sys -ErrorAction SilentlyContinue
+          if ($sys) { Write-Error "Kernel driver (.sys) found in package - MSIX must be app-only."; exit 1 }
+          Write-Host 'OK: no .sys driver payload in the package (app-only).'
+
+      - name: Upload signed MSIX + trust certificate
+        uses: actions/upload-artifact@v4
+        with:
+          name: PodBridge-msix
+          if-no-files-found: error
+          path: |
+            ${{ steps.find.outputs.msix }}
+            ${{ steps.cert.outputs.cer }}
