@@ -8,8 +8,8 @@
 
 | Component | Responsibility |
 | --------- | -------------- |
-| `PodBridge.Core` | Platform-neutral domain: AAP protocol module, Apple-Continuity BLE parser, device/battery/ear/noise-control models, mic-policy engine, and the OS-boundary interfaces (`IBleScanner`, `IAudioPolicy`, `IAudioSessionMonitor`, `IAapTransport`). No OS/UI/P-Invoke. |
-| `PodBridge.Windows` | Windows adapters implementing the Core interfaces: `WinRtBleScanner` (BLE advertisement watcher), `WindowsAudioPolicy` (NAudio + `IPolicyConfig`), `WindowsAudioSessionMonitor` (`IAudioSessionManager2`), and — Tier 2 only — `DriverAapTransport` (talks to the KMDF driver). |
+| `PodBridge.Core` | Platform-neutral domain: AAP protocol module, Apple-Continuity BLE parser, device/battery/ear/noise-control models, mic-policy engine, and the OS-boundary interfaces (`IBleScanner`, `IConnectionMonitor`, `IAudioPolicy`, `IAudioSessionMonitor`, `IAapTransport`). No OS/UI/P-Invoke. |
+| `PodBridge.Windows` | Windows adapters implementing the Core interfaces: `WinRtBleScanner` (BLE advertisement watcher), `WinRtConnectionMonitor` (WinRT paired/connected detection), `WindowsAudioPolicy` (NAudio + `IPolicyConfig`), `WindowsAudioSessionMonitor` (`IAudioSessionManager2`), and — Tier 2 only — `DriverAapTransport` (talks to the KMDF driver). |
 | `PodBridge.App` | WPF tray-first UI, view models, notifications, settings, and the composition root (DI, background host). |
 | `driver/PodBridgeAAP` | Optional C / KMDF L2CAP-bridge driver exposing a user-mode device interface for AAP over PSM 0x1001. Ships separately. |
 | `tests/PodBridge.Core.Tests` | xUnit tests exercising Core via fakes — no physical device required. |
@@ -42,6 +42,13 @@
    `AapProtocol` builds the packet → `DriverAapTransport` writes it over L2CAP via
    the driver → AirPods echo confirms → `DeviceState` updated. Driver absent →
    the feature is disabled in the UI.
+5. **Connection detection (Tier 1, driver-free):** `WinRtConnectionMonitor`
+   watches paired Bluetooth-Classic association endpoints and holds a
+   `BluetoothDevice` per matched AirPods (name heuristic) for its
+   `ConnectionStatusChanged` edge → maps to Core's `ConnectionStatus`
+   (`Connected` / `Disconnected` / `NoDevice` / `BluetoothUnavailable`) behind
+   `IConnectionMonitor` → `App` renders the tray status and pairing guidance. No
+   Bluetooth radio → `BluetoothUnavailable`, never a crash.
 
 ## Where new code goes
 
