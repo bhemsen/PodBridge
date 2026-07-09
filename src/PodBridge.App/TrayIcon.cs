@@ -4,15 +4,17 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using H.NotifyIcon;
+using H.NotifyIcon.Core;
 
 namespace PodBridge.App;
 
 /// <summary>
 /// Owns the system-tray icon and its context menu: a status line,
-/// "Pair / Reconnect", "Open Bluetooth settings", and "Exit". The status line is
-/// a static Phase-1 placeholder — live connection status and first-run pairing
-/// guidance are wired in issue #7 via <c>IConnectionMonitor</c>. Disposing
-/// removes the icon from the notification area.
+/// "Pair / Reconnect", "Open Bluetooth settings", and "Exit". The status line
+/// and tooltip are driven live from <c>IConnectionMonitor</c> via
+/// <see cref="TrayStatusController"/> (<see cref="SetStatus"/>); first-run
+/// pairing guidance is surfaced through <see cref="ShowNotification"/>. Disposing
+/// removes the icon from the notification area. Must be used on the UI thread.
 /// </summary>
 public sealed class TrayIcon : IDisposable
 {
@@ -38,10 +40,21 @@ public sealed class TrayIcon : IDisposable
     public static TrayIcon Create() => new();
 
     /// <summary>
-    /// Sets the placeholder status line. Issue #7 drives this from live
-    /// connection state; Phase 1 leaves it at its static default.
+    /// Updates the context-menu status line and the icon tooltip from the given
+    /// display phrase (see <c>ConnectionStatusText</c>). Call on the UI thread.
     /// </summary>
-    public void SetStatus(string status) => _statusItem.Header = status;
+    public void SetStatus(string statusText)
+    {
+        _statusItem.Header = $"Status: {statusText}";
+        _icon.ToolTipText = $"PodBridge — {statusText}";
+    }
+
+    /// <summary>
+    /// Shows a Windows balloon/toast notification from the tray icon. Used for
+    /// one-time first-run pairing guidance. Call on the UI thread.
+    /// </summary>
+    public void ShowNotification(string title, string message)
+        => _icon.ShowNotification(title, message, NotificationIcon.Info);
 
     /// <summary>Removes the icon from the notification area.</summary>
     public void Dispose() => _icon.Dispose();

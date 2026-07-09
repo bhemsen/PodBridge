@@ -167,7 +167,9 @@ public sealed class WinRtConnectionMonitor : IConnectionMonitor, IDisposable
         bool tracked;
         lock (_gate)
         {
-            tracked = _devices.TryAdd(info.Id, device);
+            // Stop()/Dispose() may have run during the await above; don't resurrect
+            // tracking after teardown or the held reference would leak.
+            tracked = _watcher is not null && _devices.TryAdd(info.Id, device);
         }
 
         if (tracked)
