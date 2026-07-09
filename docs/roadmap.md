@@ -11,7 +11,7 @@
 
 | Phase | Name | Spec | Milestone |
 |---|---|---|---|
-| 1 | Foundation & pairing — solution skeleton, DI/host, WPF tray shell, guided pairing/reconnect UX, CI + Verify command | — | — |
+| 1 | Foundation & pairing — solution skeleton, DI/host, WPF tray shell, guided pairing/reconnect UX, CI + Verify command | [spec](docs/specs/spec-foundation-pairing.md) | [#1](https://github.com/bhemsen/PodBridge/milestone/1) |
 | 2 | Battery & auto play/pause — WinRT BLE scanner + Apple-Continuity parser, tray battery (buds+case), in-ear media control | — | — |
 | 3 | Audio transparency — negotiated-codec detection (AAC/SBC), active mic-mode display, guidance on reaching AAC | — | — |
 | 4 | Microphone-profile policy — HiFi-lock / auto-switch / call-mode via IPolicyConfig + audio-session monitor | — | — |
