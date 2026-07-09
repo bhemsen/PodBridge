@@ -50,6 +50,10 @@
          present on the runner; this is a compile-only regression gate, not a
          shipped/signed binary. -->
     <SpectreMitigation>false</SpectreMitigation>
+    <!-- Compile-only gate: skip the WDK post-build test-signing step (it needs a
+         cert + /fd and is not part of a compile check). Real test-signing is done
+         by build-testsign.ps1 for the manual smoke test. -->
+    <SignMode>Off</SignMode>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
     <UseDebugLibraries>true</UseDebugLibraries>
