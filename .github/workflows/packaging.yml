@@ -59,9 +59,9 @@ jobs:
           Write-Host "Installed UAP platform SDKs: $($platforms -join ', ')"
           $tpv = $platforms | Sort-Object { [version]$_ } -Descending | Select-Object -First 1
           if (-not $tpv) { Write-Error 'No UAP platform SDK on this runner; .wapproj cannot build headlessly.'; exit 1 }
-          Write-Host "Using TargetPlatformVersion=$tpv"
+          Write-Host "Using PbUapSdk=$tpv"
           $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\msix\'
-          msbuild packaging/PodBridge.Package/PodBridge.Package.wapproj /restore /p:Configuration=Release /p:Platform=x64 /p:TargetPlatformVersion=$tpv /p:UapAppxPackageBuildMode=SideLoadOnly /p:AppxBundle=Never /p:AppxPackageSigningEnabled=false /p:GenerateTemporaryStoreCertificate=false /p:AppxPackageDir="$out"
+          msbuild packaging/PodBridge.Package/PodBridge.Package.wapproj /restore /p:Configuration=Release /p:Platform=x64 /p:PbUapSdk=$tpv /p:UapAppxPackageBuildMode=SideLoadOnly /p:AppxBundle=Never /p:AppxPackageSigningEnabled=false /p:GenerateTemporaryStoreCertificate=false /p:AppxPackageDir="$out"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Locate the produced MSIX

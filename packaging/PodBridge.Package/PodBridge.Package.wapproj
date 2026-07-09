@@ -36,7 +36,13 @@
          build failure. -->
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <NoWarn>$(NoWarn);NU1701</NoWarn>
-    <TargetPlatformVersion>10.0.22621.0</TargetPlatformVersion>
+    <!-- UAP SDK to build against. CI passes PbUapSdk (the newest UAP SDK actually
+         installed on the runner) via a CUSTOM global property so it never leaks
+         into the referenced .NET SDK projects; TargetPlatformVersion is assigned
+         LOCALLY here, so it does not propagate to project references. Falls back
+         to the app's min for local/VS builds. Min stays at the app's floor. -->
+    <TargetPlatformVersion Condition="'$(PbUapSdk)' != ''">$(PbUapSdk)</TargetPlatformVersion>
+    <TargetPlatformVersion Condition="'$(PbUapSdk)' == ''">10.0.22621.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.22621.0</TargetPlatformMinVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
     <EntryPointProjectUniqueName>..\..\src\PodBridge.App\PodBridge.App.csproj</EntryPointProjectUniqueName>
