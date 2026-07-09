@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Store-association manifest TEMPLATE for the Microsoft Store channel (issue #36
+  prep; the real association happens at Store submission, issue #38).
+
+  This is the file Visual Studio's "Publish -> Associate App with the Store"
+  generates as `Package.StoreAssociation.xml` next to the packaging project. It
+  is authored here with PLACEHOLDERS because its real values are
+  Partner-Center-derived and do not exist until the coined product name is
+  reserved (see packaging/README.md > "Where the Store identity comes from").
+
+  Provenance of each value (all from the Partner Center name reservation):
+    * Publisher            -> MSIX <Identity Publisher> for the Store channel;
+                              this is the certificate Subject the Store re-sign
+                              supplies (so the local manifest need only match it).
+    * PublisherDisplayName -> the Partner Center account's publisher display name.
+    * MainPackageIdentityName -> MSIX <Identity Name> for the Store channel.
+    * ReservedName         -> the reserved product name shown in the Store.
+
+  The 12-character Store PRODUCT ID (the `msstore` winget PackageIdentifier) is
+  NOT part of this file - it is recorded in `msstore-entry.yaml`. All four
+  placeholders below MUST be replaced with the reserved values in #38 before a
+  real Store submission; none of them is invented in this phase.
+
+  The self-signed GitHub-Releases fallback MSIX does NOT use this file: it keeps
+  its own throwaway identity (CN=PodBridge (Self-Signed CI)) in
+  packaging/PodBridge.Package/Package.appxmanifest.
+-->
+<StoreAssociation xmlns="http://schemas.microsoft.com/appx/2013/store" Version="1.0">
+  <Publisher>CN=TBD-PARTNER-CENTER-PUBLISHER</Publisher>
+  <PublisherDisplayName>TBD - Partner Center publisher display name</PublisherDisplayName>
+  <DeveloperAccountType>WSA</DeveloperAccountType>
+  <GeneratePackageHash>SHA256</GeneratePackageHash>
+  <ProductReservedInfo>
+    <MainPackageIdentityName>TBD-PARTNER-CENTER-IDENTITY-NAME</MainPackageIdentityName>
+    <ReservedNames>
+      <!-- The coined product name (constitution: no "Apple"/"AirPods" in the
+           name, no Apple logo). "for AirPods on Windows" is a descriptor only. -->
+      <ReservedName>PodBridge</ReservedName>
+    </ReservedNames>
+  </ProductReservedInfo>
+</StoreAssociation>

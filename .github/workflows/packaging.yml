@@ -1,4 +1,4 @@
-name: Package (MSIX)
+name: Package & Release (MSIX)
 
 # Builds PodBridge.App into a signed MSIX on windows-latest and publishes it as a
 # workflow artifact. This is separate from the dotnet-based Verify gate (ci.yml):
@@ -9,16 +9,29 @@ name: Package (MSIX)
 # Subject matches the manifest Publisher "CN=PodBridge (Self-Signed CI)"). The
 # Store-signed, no-admin channel uses a Partner-Center-derived identity applied
 # later at Store association (#38); this workflow does not need any secret.
+#
+# RELEASE CHANNEL (self-signed manual fallback, issue #36): pushing a semver tag
+# `vMAJOR.MINOR.PATCH` reuses the very same build+sign steps below and then
+# attaches the signed MSIX plus its matching trust certificate (.cer) to a GitHub
+# Release. This is the documented MANUAL FALLBACK, not the no-admin path: users
+# must one-time-trust the bundled .cer (see packaging/README.md). The primary
+# no-admin channel is the Microsoft Store (winget `-s msstore`), which becomes
+# live only after Store certification (#38); it needs no signing secret here.
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
 jobs:
   msix:
     runs-on: windows-latest
+    # Needed only by the "Publish GitHub Release" step (tag builds); harmless on
+    # branch/PR runs, where that step is skipped.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +60,25 @@ jobs:
           Export-Certificate -Cert $cert -FilePath $cer | Out-Null
           "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
           "cer=$cer" >> $env:GITHUB_OUTPUT
+
+      - name: Stamp package version from tag (release builds only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          # A release tag "vMAJOR.MINOR.PATCH" sets the MSIX <Identity Version>
+          # to "MAJOR.MINOR.PATCH.0" so each release carries a meaningful version.
+          # Fail loudly on a malformed tag rather than shipping a mis-versioned
+          # package. The manifest in the repo keeps its default for branch builds.
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -notmatch '^v(\d+)\.(\d+)\.(\d+)$') {
+            Write-Error "Release tag '$tag' must be vMAJOR.MINOR.PATCH (e.g. v0.1.0)."; exit 1
+          }
+          $version = "$($Matches[1]).$($Matches[2]).$($Matches[3]).0"
+          $manifestPath = (Resolve-Path 'packaging/PodBridge.Package/Package.appxmanifest').ProviderPath
+          $xml = [xml](Get-Content -LiteralPath $manifestPath -Raw)
+          $xml.Package.Identity.Version = $version
+          $xml.Save($manifestPath)
+          Write-Host "Stamped MSIX Identity Version = $version (from tag $tag)."
 
       - name: Build MSIX (.wapproj) via MSBuild
         shell: pwsh
@@ -118,3 +150,40 @@ jobs:
           path: |
             ${{ steps.find.outputs.msix }}
             ${{ steps.cert.outputs.cer }}
+
+      - name: Publish GitHub Release (release builds only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Self-signed manual-fallback channel (issue #36): attach the signed
+          # MSIX and its matching trust certificate to a GitHub Release. The .cer
+          # is required because a self-signed signer is not trusted by default -
+          # users import it once (admin) into LocalMachine\TrustedPeople before
+          # installing (packaging/README.md). This is NOT the no-admin path; the
+          # Store channel (winget -s msstore, #38) is, and needs no cert step.
+          # Notes come from a committed template (no here-string: a PowerShell
+          # here-string cannot live inside a YAML block scalar).
+          $tag = $env:GITHUB_REF_NAME
+          $msix = '${{ steps.find.outputs.msix }}'
+          $cer = '${{ steps.cert.outputs.cer }}'
+          # A downloaded asset keeps its on-disk basename; the `#label` suffix is
+          # only a cosmetic display label (gh release create), NOT the filename.
+          # The .wapproj emits `PodBridgeContributors.PodBridge_*_x64.msix`, but
+          # the install docs tell users to run `Add-AppxPackage -Path
+          # .\PodBridge-<tag>.msix`. Copy to that exact name so the documented
+          # command resolves. (The .cer's on-disk name already matches its label.)
+          $msixAsset = Join-Path $env:RUNNER_TEMP "PodBridge-$tag.msix"
+          Copy-Item -LiteralPath $msix -Destination $msixAsset -Force
+          $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          $template = Get-Content -LiteralPath 'packaging/release-notes.template.md' -Raw
+          $template.Replace('__TAG__', $tag) | Set-Content -LiteralPath $notes -Encoding utf8
+          gh release create $tag `
+            $msixAsset `
+            "$cer#PodBridge-SelfSigned.cer" `
+            --title "PodBridge $tag" `
+            --notes-file $notes `
+            --verify-tag
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "OK: published GitHub Release $tag with the signed MSIX + trust certificate."
