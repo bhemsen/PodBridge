@@ -1,0 +1,32 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.{cs}]
+indent_size = 4
+dotnet_sort_system_directives_first = true
+csharp_new_line_before_open_brace = all
+dotnet_style_qualification_for_field = false:warning
+csharp_style_var_when_type_is_apparent = true:suggestion
+
+# CA1716: identifier conflicts with a reserved keyword in another CLR language (e.g. VB's `Stop`).
+# PodBridge is a C#-only Windows app; cross-language interop purity is not a goal, and
+# Start()/Stop() is the idiomatic lifecycle naming. Disabled deliberately (constitution: analyzers
+# at recommended, treated as errors — this is the one documented exception).
+dotnet_diagnostic.CA1716.severity = none
+
+[*.{csproj,props,targets,json,yml,yaml,xml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+# Test projects: method names follow the Method_Scenario_Expectation convention,
+# so underscores are intentional. CA1707 stays enforced everywhere else.
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none

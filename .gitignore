@@ -1,0 +1,35 @@
+# .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+*.userprefs
+project.lock.json
+artifacts/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.DotSettings.user
+
+# Test / coverage
+[Tt]est[Rr]esult*/
+coverage*/
+*.coverage
+*.trx
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Secrets (none required today; never commit real secrets)
+.env
+*.env.local
+
+# Driver build output (Tier 2)
+driver/**/x64/
+driver/**/*.cer
