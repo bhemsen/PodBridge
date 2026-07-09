@@ -8,4 +8,16 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <!-- License / attribution metadata (Apache-2.0). Copyright flows into the
+       generated AssemblyCopyright attribute so it ships inside the built
+       binaries and the MSIX payload; PackageLicenseExpression declares the SPDX
+       identifier. See LICENSE, NOTICE, THIRD-PARTY-NOTICES.md. -->
+  <PropertyGroup>
+    <Product>PodBridge</Product>
+    <Company>PodBridge contributors</Company>
+    <Authors>PodBridge contributors</Authors>
+    <Copyright>Copyright 2026 PodBridge contributors</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
 </Project>
