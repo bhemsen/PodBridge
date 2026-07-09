@@ -32,7 +32,14 @@
          skips the Universal ApiValidator post-build step so the compile-only CI
          gate does not fail on non-UniversalDDI APIs. -->
     <DriverTargetPlatform>Desktop</DriverTargetPlatform>
-    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <!-- The WDK NuGet ships its MSBuild task DLL versioned per MSBuild major, so
+         the package version must match the running toolset: VS 2022 (MSBuild 17)
+         -> 26100; VS 2026 (MSBuild 18, e.g. windows-latest) -> 28000. Track it
+         off VisualStudioVersion so both build. -->
+    <PodBridgeWdkVersion Condition="'$(VisualStudioVersion)' &gt;= '18.0'">10.0.28000.1839</PodBridgeWdkVersion>
+    <PodBridgeWdkVersion Condition="'$(PodBridgeWdkVersion)' == ''">10.0.26100.6584</PodBridgeWdkVersion>
+    <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)' &gt;= '18.0'">10.0.28000.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion Condition="'$(WindowsTargetPlatformVersion)' == ''">10.0.26100.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
@@ -72,8 +79,8 @@
     <None Include="PodBridgeAAP.inf" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Windows.WDK.x64" Version="10.0.26100.6584" />
-    <PackageReference Include="Microsoft.Windows.SDK.CPP.x64" Version="10.0.26100.6584" />
+    <PackageReference Include="Microsoft.Windows.WDK.x64" Version="$(PodBridgeWdkVersion)" />
+    <PackageReference Include="Microsoft.Windows.SDK.CPP.x64" Version="$(PodBridgeWdkVersion)" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
