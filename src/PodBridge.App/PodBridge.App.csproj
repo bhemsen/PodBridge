@@ -9,12 +9,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\PodBridge.Core\PodBridge.Core.csproj" />
     <ProjectReference Include="..\PodBridge.Windows\PodBridge.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Placeholder tray icon (Phase 1); loaded via pack URI in TrayIcon. -->
+    <Resource Include="Assets\tray.ico" />
   </ItemGroup>
 
 </Project>

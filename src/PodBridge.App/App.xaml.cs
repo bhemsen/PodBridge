@@ -15,6 +15,7 @@ public partial class App : Application
 
     private SingleInstanceGuard? _instanceGuard;
     private IHost? _host;
+    private TrayIcon? _trayIcon;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -30,10 +31,17 @@ public partial class App : Application
 
         _host = CompositionRoot.BuildHost();
         _host.Start();
+
+        // Tray icon is the app's only surface in Phase 1; create it once the
+        // host is up and tear it down on exit.
+        _trayIcon = TrayIcon.Create();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+
         if (_host is not null)
         {
             _host.StopAsync().GetAwaiter().GetResult();
