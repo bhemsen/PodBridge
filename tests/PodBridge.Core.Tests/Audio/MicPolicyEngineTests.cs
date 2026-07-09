@@ -24,7 +24,7 @@ public class MicPolicyEngineTests
     {
         var policy = TwoDevicePolicy();
         var monitor = new FakeAudioSessionMonitor();
-        using var engine = new MicPolicyEngine(policy, monitor);
+        using var engine = NewEngine(policy, monitor);
 
         Assert.Equal(MicPolicyMode.HiFiLock, engine.CurrentMode);
         Assert.False(engine.NoAlternateMicWarning);
@@ -43,7 +43,7 @@ public class MicPolicyEngineTests
     {
         var policy = TwoDevicePolicy();
         var monitor = new FakeAudioSessionMonitor();
-        using var engine = new MicPolicyEngine(policy, monitor);
+        using var engine = NewEngine(policy, monitor);
         engine.SetMode(MicPolicyMode.AutoSwitch);
 
         // Idle Auto-switch == HiFi-lock assignment.
@@ -68,7 +68,7 @@ public class MicPolicyEngineTests
     {
         var policy = TwoDevicePolicy();
         var monitor = new FakeAudioSessionMonitor();
-        using var engine = new MicPolicyEngine(policy, monitor); // stays HiFi-lock
+        using var engine = NewEngine(policy, monitor); // stays HiFi-lock
 
         monitor.RaiseCaptureStarted();
 
@@ -83,7 +83,7 @@ public class MicPolicyEngineTests
     {
         var policy = TwoDevicePolicy();
         var monitor = new FakeAudioSessionMonitor();
-        using var engine = new MicPolicyEngine(policy, monitor);
+        using var engine = NewEngine(policy, monitor);
         engine.SetMode(MicPolicyMode.CallMode);
 
         // Toggle off (default): comms on the fallback (A2DP-preferred).
@@ -115,7 +115,7 @@ public class MicPolicyEngineTests
         policy.SeedDefault(preferred, AudioRole.Communications);
 
         var monitor = new FakeAudioSessionMonitor();
-        using var engine = new MicPolicyEngine(policy, monitor); // HiFi-lock
+        using var engine = NewEngine(policy, monitor); // HiFi-lock
 
         Assert.Equal("spk-second", policy.DefaultId(AudioEndpointDirection.Render, AudioRole.Communications));
     }
@@ -127,7 +127,7 @@ public class MicPolicyEngineTests
     {
         var policy = AirPodsOnlyPolicy();
         var monitor = new FakeAudioSessionMonitor();
-        using var engine = new MicPolicyEngine(policy, monitor); // HiFi-lock, only AirPods
+        using var engine = NewEngine(policy, monitor); // HiFi-lock, only AirPods
 
         Assert.True(engine.NoAlternateMicWarning);
         // Media render still the AirPods.
@@ -141,7 +141,7 @@ public class MicPolicyEngineTests
     {
         var policy = AirPodsOnlyPolicy();
         var monitor = new FakeAudioSessionMonitor();
-        using var engine = new MicPolicyEngine(policy, monitor);
+        using var engine = NewEngine(policy, monitor);
         engine.SetMode(MicPolicyMode.AutoSwitch);
 
         monitor.RaiseCaptureStarted(); // would promote if a fallback existed
@@ -157,7 +157,7 @@ public class MicPolicyEngineTests
     {
         var policy = AirPodsOnlyPolicy();
         var monitor = new FakeAudioSessionMonitor();
-        using var engine = new MicPolicyEngine(policy, monitor);
+        using var engine = NewEngine(policy, monitor);
 
         engine.SetCallModeActive(true); // user explicitly opts into the AirPods mic
 
@@ -173,7 +173,7 @@ public class MicPolicyEngineTests
     {
         var policy = TwoDevicePolicy();
         var monitor = new FakeAudioSessionMonitor();
-        using var engine = new MicPolicyEngine(policy, monitor);
+        using var engine = NewEngine(policy, monitor);
         Assert.False(engine.NoAlternateMicWarning);
 
         var events = new List<bool>();
@@ -191,6 +191,36 @@ public class MicPolicyEngineTests
     }
 
     [Fact]
+    public void EndpointChange_FromMonitor_TriggersRefresh_UpdatingDegradeWarning()
+    {
+        var policy = TwoDevicePolicy();
+        var monitor = new FakeAudioSessionMonitor();
+        var changeMonitor = new FakeAudioEndpointChangeMonitor();
+        using var engine = new MicPolicyEngine(policy, monitor, changeMonitor);
+        Assert.False(engine.NoAlternateMicWarning);
+
+        var events = new List<bool>();
+        engine.NoAlternateMicWarningChanged += (_, on) => events.Add(on);
+
+        // The fallback mic is unplugged, then the topology-change monitor fires: the
+        // engine must Refresh on its own (no explicit Refresh call) and degrade.
+        policy.Remove(SpkRender);
+        policy.Remove(MicCapture);
+        changeMonitor.RaiseEndpointsChanged();
+
+        Assert.True(engine.NoAlternateMicWarning);
+        Assert.True(Assert.Single(events)); // fired exactly once, with value true
+
+        // Fallback returns and the monitor fires again: the warning clears live.
+        policy.Add(SpkRender, AudioEndpointDirection.Render, isAirPods: false);
+        policy.Add(MicCapture, AudioEndpointDirection.Capture, isAirPods: false);
+        changeMonitor.RaiseEndpointsChanged();
+
+        Assert.False(engine.NoAlternateMicWarning);
+        Assert.Collection(events, Assert.True, Assert.False); // true then false, exactly two
+    }
+
+    [Fact]
     public void NoAlternateMicWarningText_IsHonestAboutTheMicLimit()
     {
         Assert.Contains("mic", MicPolicyEngine.NoAlternateMicWarningText, StringComparison.OrdinalIgnoreCase);
@@ -198,6 +228,12 @@ public class MicPolicyEngineTests
     }
 
     // ---- Fixtures --------------------------------------------------------------
+
+    // Constructs the engine with a real audio-session monitor fake plus an inert
+    // topology-change monitor (the tests that exercise topology changes construct the
+    // engine explicitly with a named change monitor instead).
+    private static MicPolicyEngine NewEngine(FakeAudioPolicy policy, FakeAudioSessionMonitor monitor)
+        => new(policy, monitor, new FakeAudioEndpointChangeMonitor());
 
     // AirPods (render + capture) plus a non-AirPods fallback (render + capture).
     private static FakeAudioPolicy TwoDevicePolicy()

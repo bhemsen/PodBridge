@@ -23,6 +23,11 @@ public sealed class TrayMicController : IDisposable
     private readonly MicPolicyModeStore _store;
     private readonly Dispatcher _dispatcher;
 
+    // Guards the one-shot degrade toast: set when shown, re-armed when the warning
+    // clears, so the toast fires once per transition into the degraded state (never
+    // repeatedly while it stays degraded).
+    private bool _warningToastShown;
+
     private TrayMicController(
         TrayIcon tray,
         MicPolicyEngine engine,
@@ -60,7 +65,12 @@ public sealed class TrayMicController : IDisposable
         // Restore the persisted mode (default HiFi-lock on first run) into the engine,
         // which re-applies the endpoint-role assignment, then reflect it in the menu.
         _engine.SetMode(_store.Load());
-        Render();
+
+        // The engine raises NoAlternateMicWarningChanged from its constructor — before
+        // this controller could subscribe — so the initial degrade (the primary
+        // AirPods-only-at-launch case) is never delivered as an event. Replay the current
+        // warning state here so the menu line AND the one-shot toast still fire at launch.
+        ApplyWarning(_engine.NoAlternateMicWarning);
     }
 
     /// <summary>Unsubscribes so no late warning event touches a disposed tray.</summary>
@@ -88,10 +98,18 @@ public sealed class TrayMicController : IDisposable
     {
         Render();
 
+        if (!degraded)
+        {
+            _warningToastShown = false; // re-arm for the next transition into degraded
+            return;
+        }
+
         // On the transition into the degraded state, also raise a one-shot toast so the
         // honesty warning is noticed even if the menu is closed — never a silent HFP.
-        if (degraded)
+        // The guard keeps it one-shot: it fires once per degrade, not on every replay.
+        if (!_warningToastShown)
         {
+            _warningToastShown = true;
             _tray.ShowNotification(WarningTitle, MicPolicyEngine.NoAlternateMicWarningText);
         }
     }

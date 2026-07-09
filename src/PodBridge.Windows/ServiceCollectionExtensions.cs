@@ -50,6 +50,13 @@ public static class ServiceCollectionExtensions
         // shared instance keeps the lifetime unambiguous (no captive-transient).
         services.AddSingleton<IAudioSessionMonitor, WindowsAudioSessionMonitor>();
         services.AddSingleton<IAudioPolicy, WindowsAudioPolicy>();
+
+        // Device-topology change source (Core Audio IMMNotificationClient). A singleton
+        // owning the enumerator + notification registration for the app's lifetime
+        // (disposed by the container on shutdown). It triggers MicPolicyEngine.Refresh so
+        // the single-device degrade warning updates live when the fallback mic is
+        // added/removed; the composition root starts and stops it.
+        services.AddSingleton<IAudioEndpointChangeMonitor, WindowsAudioEndpointChangeMonitor>();
         return services;
     }
 }

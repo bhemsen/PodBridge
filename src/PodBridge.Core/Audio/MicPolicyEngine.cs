@@ -37,6 +37,7 @@ public sealed class MicPolicyEngine : IDisposable
 
     private readonly IAudioPolicy _audioPolicy;
     private readonly IAudioSessionMonitor _sessionMonitor;
+    private readonly IAudioEndpointChangeMonitor _endpointChangeMonitor;
     private readonly Lock _gate = new();
 
     private MicPolicyMode _mode = MicPolicyMode.HiFiLock;
@@ -52,15 +53,24 @@ public sealed class MicPolicyEngine : IDisposable
     /// </summary>
     /// <param name="audioPolicy">Endpoint enumeration + per-role default setter.</param>
     /// <param name="sessionMonitor">Comms-capture-session open/close source.</param>
-    public MicPolicyEngine(IAudioPolicy audioPolicy, IAudioSessionMonitor sessionMonitor)
+    /// <param name="endpointChangeMonitor">Device-topology change source; each change
+    /// triggers a <see cref="Refresh"/> so the degrade warning tracks the fallback mic
+    /// appearing or disappearing live.</param>
+    public MicPolicyEngine(
+        IAudioPolicy audioPolicy,
+        IAudioSessionMonitor sessionMonitor,
+        IAudioEndpointChangeMonitor endpointChangeMonitor)
     {
         ArgumentNullException.ThrowIfNull(audioPolicy);
         ArgumentNullException.ThrowIfNull(sessionMonitor);
+        ArgumentNullException.ThrowIfNull(endpointChangeMonitor);
 
         _audioPolicy = audioPolicy;
         _sessionMonitor = sessionMonitor;
+        _endpointChangeMonitor = endpointChangeMonitor;
         _sessionMonitor.CommunicationsCaptureStarted += OnCommsCaptureStarted;
         _sessionMonitor.CommunicationsCaptureStopped += OnCommsCaptureStopped;
+        _endpointChangeMonitor.EndpointsChanged += OnEndpointsChanged;
         Mutate(static () => { }); // establish the default HiFi-lock assignment
     }
 
@@ -100,11 +110,12 @@ public sealed class MicPolicyEngine : IDisposable
     /// </summary>
     public void Refresh() => Mutate(static () => { });
 
-    /// <summary>Unsubscribes from the session monitor.</summary>
+    /// <summary>Unsubscribes from the session and endpoint-change monitors.</summary>
     public void Dispose()
     {
         _sessionMonitor.CommunicationsCaptureStarted -= OnCommsCaptureStarted;
         _sessionMonitor.CommunicationsCaptureStopped -= OnCommsCaptureStopped;
+        _endpointChangeMonitor.EndpointsChanged -= OnEndpointsChanged;
         GC.SuppressFinalize(this);
     }
 
@@ -113,6 +124,10 @@ public sealed class MicPolicyEngine : IDisposable
 
     private void OnCommsCaptureStopped(object? sender, EventArgs e)
         => Mutate(() => _commsCaptureOpen = false);
+
+    // A device was added/removed or the default changed: re-evaluate the assignment so
+    // the degrade warning tracks the fallback mic appearing or disappearing live.
+    private void OnEndpointsChanged(object? sender, EventArgs e) => Refresh();
 
     // Applies a state change under the gate, re-applies the policy, then raises the
     // warning-changed event OUTSIDE the lock to avoid handler reentrancy deadlocks.

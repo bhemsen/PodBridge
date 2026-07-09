@@ -26,6 +26,7 @@ public partial class App : Application
     private TrayMicController? _trayMicController;
     private IBleScanner? _bleScanner;
     private IAudioSessionMonitor? _audioSessionMonitor;
+    private IAudioEndpointChangeMonitor? _audioEndpointChangeMonitor;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -110,6 +111,13 @@ public partial class App : Application
 
         _audioSessionMonitor = services.GetRequiredService<IAudioSessionMonitor>();
         _audioSessionMonitor.Start();
+
+        // Start the device-topology change source AFTER the engine is resolved (its
+        // EndpointsChanged subscription is wired in the engine's constructor), so a
+        // fallback-mic add/remove drives a live Refresh of the degrade warning. The
+        // container owns its lifetime; the composition root starts and stops it.
+        _audioEndpointChangeMonitor = services.GetRequiredService<IAudioEndpointChangeMonitor>();
+        _audioEndpointChangeMonitor.Start();
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -139,6 +147,11 @@ public partial class App : Application
         // engine during teardown; the container still disposes the monitor and engine.
         _audioSessionMonitor?.Stop();
         _audioSessionMonitor = null;
+
+        // Stop the device-topology change source so no endpoint event drives a Refresh
+        // during teardown; the container still disposes it.
+        _audioEndpointChangeMonitor?.Stop();
+        _audioEndpointChangeMonitor = null;
 
         _trayIcon?.Dispose();
         _trayIcon = null;
