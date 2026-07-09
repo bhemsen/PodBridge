@@ -29,6 +29,13 @@
 
   <PropertyGroup>
     <ProjectGuid>B7E4F2A1-3C6D-4E8B-9A0F-1D2C3B4A5E6F</ProjectGuid>
+    <!-- This is a packaging project, not a Core compilation unit: the repo-root
+         Directory.Build.props warnings-as-errors (a Core rule) must not escalate
+         the benign NuGet fallback warning NU1701 - raised because the UAP-targeted
+         .wapproj restore graph sees the WPF-only H.NotifyIcon.Wpf package - into a
+         build failure. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
     <TargetPlatformVersion>10.0.22621.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.22621.0</TargetPlatformMinVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
