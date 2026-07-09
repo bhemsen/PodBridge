@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Media;
 using PodBridge.Windows;
@@ -35,5 +36,12 @@ public static class CompositionRoot
         // takes an optional TimeProvider that defaults to the system clock.
         services.AddSingleton<IDeviceStateProvider, DeviceStateTracker>();
         services.AddSingleton<AutoPlayPauseEngine>();
+
+        // Phase 4 mic-profile policy engine (issue #30). A singleton holding live event
+        // subscriptions to IAudioSessionMonitor for the app's lifetime (disposed by the
+        // container on shutdown). Constructed at startup so it runs on the background
+        // host and Auto-switch reacts live to comms-capture sessions; the tray drives
+        // its mode + Call-mode toggle and reflects the single-device degrade warning.
+        services.AddSingleton<MicPolicyEngine>();
     }
 }

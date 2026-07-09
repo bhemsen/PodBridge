@@ -11,7 +11,9 @@ namespace PodBridge.Windows;
 /// <c>PodBridge.App</c> calls this so feature code never references concrete
 /// adapters. Phase 1 registers the connection monitor; Phase 2 adds the BLE
 /// advertisement scanner and the media-session controller; Phase 3 adds the
-/// read-only audio-state reader.
+/// read-only audio-state reader; Phase 4 adds the mic-profile policy lever
+/// (<see cref="IAudioPolicy"/>) and the comms-capture session monitor
+/// (<see cref="IAudioSessionMonitor"/>).
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -38,6 +40,16 @@ public static class ServiceCollectionExtensions
         // creates and releases short-lived Core Audio COM objects per Read() — so it
         // needs no shared lifetime and is registered transient (no IDisposable).
         services.AddTransient<IAudioStateReader, WindowsAudioStateReader>();
+
+        // Phase 4 mic-profile policy (issue #30). Both are singletons: the session
+        // monitor owns a background MTA COM thread + IAudioSessionManager2 notification
+        // registrations that must live for the app's lifetime, and the container
+        // disposes it (IDisposable) on shutdown. The audio-policy adapter is stateless
+        // per call (it creates + releases short-lived IPolicyConfig/MMDevice COM objects
+        // each call) but its sole consumer is the singleton MicPolicyEngine, so a single
+        // shared instance keeps the lifetime unambiguous (no captive-transient).
+        services.AddSingleton<IAudioSessionMonitor, WindowsAudioSessionMonitor>();
+        services.AddSingleton<IAudioPolicy, WindowsAudioPolicy>();
         return services;
     }
 }
