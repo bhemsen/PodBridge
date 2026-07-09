@@ -119,8 +119,7 @@ are written MSB-left as they appear on the wire. `[x]` = a variable field.
   ```
   The same frame is emitted both **unsolicited** (when the mode is changed on the
   device itself, e.g. a stem long-press) and **as the acknowledgement** after a
-  host set: "the AirPods respond with the same packet after the mode has been
-  changed." (Source 1; Source 3 relies on this notification as the ack.)
+  host set. (Source 1; Source 3 relies on this notification as the ack.)
 - **Confirm logic for #44:** send the set packet, then wait for the inbound
   `09 00 0D` notification and compare its `[mode]` byte to the requested mode.
   Match ⇒ confirmed; **mismatch or timeout ⇒ revert** the optimistic UI.
