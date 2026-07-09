@@ -20,6 +20,7 @@ public partial class App : Application
     private SingleInstanceGuard? _instanceGuard;
     private IHost? _host;
     private TrayIcon? _trayIcon;
+    private AboutWindow? _aboutWindow;
     private TrayStatusController? _trayStatusController;
     private TrayBatteryController? _trayBatteryController;
     private TrayAudioController? _trayAudioController;
@@ -43,9 +44,10 @@ public partial class App : Application
         _host = CompositionRoot.BuildHost();
         _host.Start();
 
-        // Tray icon is the app's only surface in Phase 1; create it once the
-        // host is up and tear it down on exit.
+        // Tray icon is the app's primary surface; create it once the host is up and
+        // tear it down on exit. The "About" entry opens the app's only window.
         _trayIcon = TrayIcon.Create();
+        _trayIcon.SetAboutHandler(ShowAboutWindow);
 
         var monitor = _host.Services.GetRequiredService<IConnectionMonitor>();
 
@@ -120,6 +122,24 @@ public partial class App : Application
         _audioEndpointChangeMonitor.Start();
     }
 
+    // Opens the About window (the app's first non-tray window) from the tray "About"
+    // entry. A single instance is reused: if it is already open, bring it to the
+    // front rather than stacking duplicates. Runs on the UI dispatcher (the tray
+    // handler fires on the UI thread). ShutdownMode is OnExplicitShutdown, so closing
+    // this window never exits the tray-resident app.
+    private void ShowAboutWindow()
+    {
+        if (_aboutWindow is not null)
+        {
+            _aboutWindow.Activate();
+            return;
+        }
+
+        _aboutWindow = new AboutWindow(AboutViewModel.Create());
+        _aboutWindow.Closed += (_, _) => _aboutWindow = null;
+        _aboutWindow.Show();
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         // Unsubscribe the tray controllers first so no late StateChanged/StatusChanged
@@ -152,6 +172,11 @@ public partial class App : Application
         // during teardown; the container still disposes it.
         _audioEndpointChangeMonitor?.Stop();
         _audioEndpointChangeMonitor = null;
+
+        // Close the About window if the user left it open, so no window keeps the
+        // process alive after an explicit shutdown.
+        _aboutWindow?.Close();
+        _aboutWindow = null;
 
         _trayIcon?.Dispose();
         _trayIcon = null;

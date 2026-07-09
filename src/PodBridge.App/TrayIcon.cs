@@ -23,10 +23,11 @@ namespace PodBridge.App;
 /// a Call-mode toggle and the honest single-device degrade warning line, driven by
 /// <see cref="TrayMicController"/> (<see cref="SetMicPolicyHandlers"/>,
 /// <see cref="SetSelectedMicMode"/>, <see cref="SetCallModeActive"/>,
-/// <see cref="SetMicWarning"/>). The tooltip stays concise (status + battery only); the
-/// audio surface lives in the menu. First-run pairing guidance and the SBC guidance are
-/// surfaced through <see cref="ShowNotification"/>. Disposing removes the icon from the
-/// notification area. Must be used on the UI thread.
+/// <see cref="SetMicWarning"/>). An "About PodBridge" entry opens the About window via
+/// the handler wired with <see cref="SetAboutHandler"/>. The tooltip stays concise
+/// (status + battery only); the audio surface lives in the menu. First-run pairing
+/// guidance and the SBC guidance are surfaced through <see cref="ShowNotification"/>.
+/// Disposing removes the icon from the notification area. Must be used on the UI thread.
 /// </summary>
 public sealed class TrayIcon : IDisposable
 {
@@ -50,6 +51,7 @@ public sealed class TrayIcon : IDisposable
     private Action? _refreshAudioHandler;
     private Action<MicPolicyMode>? _micModeHandler;
     private Action? _callModeToggleHandler;
+    private Action? _aboutHandler;
 
     private TrayIcon()
     {
@@ -122,6 +124,12 @@ public sealed class TrayIcon : IDisposable
     public void SetRefreshAudioHandler(Action handler) => _refreshAudioHandler = handler;
 
     /// <summary>
+    /// Wires the callback invoked by the "About PodBridge" menu action (opens the
+    /// About window). Call on the UI thread.
+    /// </summary>
+    public void SetAboutHandler(Action handler) => _aboutHandler = handler;
+
+    /// <summary>
     /// Wires the mic-policy submenu actions: <paramref name="onModeSelected"/> fires
     /// with the picked mode, <paramref name="onCallModeToggled"/> when the Call-mode
     /// toggle is clicked. Call on the UI thread.
@@ -191,6 +199,7 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(CreateItem("Pair / Reconnect", OnOpenBluetoothSettings));
         menu.Items.Add(CreateItem("Open Bluetooth settings", OnOpenBluetoothSettings));
         menu.Items.Add(new Separator());
+        menu.Items.Add(CreateItem("About PodBridge", OnAbout));
         menu.Items.Add(CreateItem("Exit", OnExit));
         return menu;
     }
@@ -232,6 +241,9 @@ public sealed class TrayIcon : IDisposable
 
     private void OnRefreshAudio(object sender, RoutedEventArgs e)
         => _refreshAudioHandler?.Invoke();
+
+    private void OnAbout(object sender, RoutedEventArgs e)
+        => _aboutHandler?.Invoke();
 
     private static void OnOpenBluetoothSettings(object sender, RoutedEventArgs e)
         => OpenBluetoothSettings();

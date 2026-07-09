@@ -23,4 +23,13 @@
     <Resource Include="Assets\tray.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Ship the license + attribution files in the app payload so the About window
+         can surface the third-party notices at runtime and the MSIX carries them. -->
+    <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\NOTICE" Link="NOTICE" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
