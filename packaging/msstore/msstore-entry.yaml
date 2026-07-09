@@ -1,0 +1,35 @@
+# PodBridge - winget `msstore` entry (issue #36 prep)
+#
+# NOT a winget-pkgs community manifest. The community winget repo cannot host a
+# YAML manifest that points at a Microsoft Store (`msstore`) app
+# (microsoft/winget-cli #3271, #3048 - see docs/research/msix-packaging.md,
+# source 10). For a Store app, `winget` resolves the app by its Store product ID
+# directly against the `msstore` source; there is nothing to submit to
+# winget-pkgs. So "the msstore entry" is exactly this record: the product ID and
+# the install command, plus where the ID comes from.
+#
+# This file is a local record consumed by docs / release notes and guarded by a
+# device-independent test; it is not read by any tool at build or install time.
+
+source: msstore                       # the Microsoft Store catalog source
+                                      # (https://storeedgefd.dsx.mp.microsoft.com/v9.0)
+
+# The `msstore` PackageIdentifier IS the 12-character alphanumeric Store product
+# ID (shape like 9P6SKKFKSHKM or XP9KHM4BK9FZ7Q). It is Partner-Center-derived:
+# it is minted when the coined product name is reserved, and it is resolvable via
+# `winget ... -s msstore` ONLY after the Store submission is certified/published
+# (issue #38). Until then this is a documented placeholder - do NOT invent an ID.
+packageIdentifier: STORE_PRODUCT_ID_TBD
+
+# The verified, no-admin install command (the headline path). Store-signed by
+# Microsoft, so no certificate-trust step is needed. `msstore` IDs do not need
+# `--exact`. `--scope user` keeps it a per-user, no-admin install.
+installCommand: winget install STORE_PRODUCT_ID_TBD -s msstore --scope user
+
+# Status of this entry (see packaging/README.md):
+#   - Authored here (#36) against the placeholder above.
+#   - The real product ID is filled in and the no-admin install is first
+#     VERIFIED at the human-QA gate AFTER Store certification (#38). It cannot be
+#     verified here because the listing does not exist until certification.
+verified: false
+resolvableAfter: store-certification (#38)
