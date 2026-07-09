@@ -7,42 +7,18 @@ namespace PodBridge.Windows.Interop;
 // (microphone) session opening/closing driver-free and admin-free, per
 // docs/research/mic-profile-policy-comms-detection.md (#26). It complements the
 // read-only surface in CoreAudioInterop.cs (which is intentionally NOT edited
-// here — a sibling issue builds on it in parallel) by declaring the vtable slots
-// that file omits: IMMDeviceEnumerator::GetDefaultAudioEndpoint, the
-// IAudioSessionManager2 (un)register-notification methods, the notification
-// callback interfaces, and IAudioSessionControl2::IsSystemSoundsSession.
+// here) by declaring the vtable slots that file omits: the IAudioSessionManager2
+// (un)register-notification methods, the notification callback interfaces, and
+// IAudioSessionControl2::IsSystemSoundsSession.
 //
-// The interfaces reuse EDataFlow / AudioSessionState / IMMDevice /
-// IAudioSessionEnumerator / IAudioSessionControl / NativeMethods from
-// CoreAudioInterop.cs (same assembly, same namespace). As in that file, vtable
+// ERole and IMMDeviceEnumeratorWithDefault (with GetDefaultAudioEndpoint) are the
+// canonical property of PolicyConfigInterop.cs (#28/#79) in this same namespace
+// and are REUSED from there — not re-declared here — to avoid a duplicate-type
+// collision. The interfaces below also reuse EDataFlow / AudioSessionState /
+// IMMDevice / IAudioSessionEnumerator / IAudioSessionControl / NativeMethods from
+// CoreAudioInterop.cs (same assembly, same namespace). As in those files, vtable
 // slots that are never called are declared as empty placeholders purely to
 // preserve slot order. Nothing here opens a stream or switches an endpoint.
-
-/// <summary>Audio endpoint role (<c>ERole</c>).</summary>
-internal enum ERole
-{
-    Console = 0,        // eConsole
-    Multimedia = 1,     // eMultimedia
-    Communications = 2, // eCommunications
-}
-
-/// <summary>
-/// <c>IMMDeviceEnumerator</c> re-declared with the <c>GetDefaultAudioEndpoint</c>
-/// slot (slot 4) that <see cref="IMMDeviceEnumerator"/> in CoreAudioInterop omits.
-/// Same IID; the CLS-activated enumerator supports both via QueryInterface.
-/// </summary>
-[ComImport]
-[Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMMDeviceEnumeratorWithDefault
-{
-    // Slot 3 (unused here) — declared only to preserve vtable order.
-    void EnumAudioEndpoints(EDataFlow dataFlow, uint dwStateMask, out IntPtr ppDevices);
-
-    // Slot 4 — resolve the current default endpoint for a data-flow + role
-    // (we ask for the eCommunications capture endpoint per research #26).
-    void GetDefaultAudioEndpoint(EDataFlow dataFlow, ERole role, out IMMDevice ppEndpoint);
-}
 
 /// <summary>
 /// <c>IAudioSessionManager2</c> re-declared with the notification (un)register

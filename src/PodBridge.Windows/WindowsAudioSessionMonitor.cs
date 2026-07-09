@@ -114,6 +114,11 @@ public sealed class WindowsAudioSessionMonitor : IAudioSessionMonitor, IDisposab
             _wake?.Dispose();
             _wake = null;
             _duckedSessions.Clear();
+
+            // Reset the debounced edge state (safe now the COM thread has exited) so a
+            // Start→engaged→Stop→Start cycle re-detects from a clean "not engaged"
+            // baseline and never emits a spurious Stopped on the next start.
+            _lastEngaged = false;
         }
     }
 
