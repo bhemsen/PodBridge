@@ -8,8 +8,8 @@
 
 | Component | Responsibility |
 | --------- | -------------- |
-| `PodBridge.Core` | Platform-neutral domain: AAP protocol module, Apple-Continuity BLE parser, device/battery/ear/noise-control models, mic-policy engine, and the OS-boundary interfaces (`IBleScanner`, `IConnectionMonitor`, `IAudioPolicy`, `IAudioSessionMonitor`, `IAapTransport`). No OS/UI/P-Invoke. |
-| `PodBridge.Windows` | Windows adapters implementing the Core interfaces: `WinRtBleScanner` (BLE advertisement watcher), `WinRtConnectionMonitor` (WinRT paired/connected detection), `WindowsAudioPolicy` (NAudio + `IPolicyConfig`), `WindowsAudioSessionMonitor` (`IAudioSessionManager2`), and — Tier 2 only — `DriverAapTransport` (talks to the KMDF driver). |
+| `PodBridge.Core` | Platform-neutral domain: AAP protocol module, Apple-Continuity BLE parser (`ContinuityParser` → `BleAdvertisement` in, `DeviceState` battery/charging/in-ear out), the connection-gated telemetry pipeline (`IDeviceStateProvider`/`DeviceStateTracker`), the auto play/pause engine (`AutoPlayPauseEngine`), noise-control models, mic-policy engine, and the OS-boundary interfaces (`IBleScanner`, `IConnectionMonitor`, `IMediaController`, `IAudioPolicy`, `IAudioSessionMonitor`, `IAapTransport`). No OS/UI/P-Invoke. |
+| `PodBridge.Windows` | Windows adapters implementing the Core interfaces: `WinRtBleScanner` (BLE advertisement watcher), `WinRtConnectionMonitor` (WinRT paired/connected detection), `WindowsMediaController` (GSMTC media-session pause/resume), `WindowsAudioPolicy` (NAudio + `IPolicyConfig`), `WindowsAudioSessionMonitor` (`IAudioSessionManager2`), and — Tier 2 only — `DriverAapTransport` (talks to the KMDF driver). |
 | `PodBridge.App` | WPF tray-first UI, view models, notifications, settings, and the composition root (DI, background host). |
 | `driver/PodBridgeAAP` | Optional C / KMDF L2CAP-bridge driver exposing a user-mode device interface for AAP over PSM 0x1001. Ships separately. |
 | `tests/PodBridge.Core.Tests` | xUnit tests exercising Core via fakes — no physical device required. |
@@ -29,9 +29,20 @@
 ## Key flows
 
 1. **Battery + auto play/pause (Tier 1, driver-free):** `WinRtBleScanner`
-   receives a BLE advertisement → Core's Continuity parser decodes the Apple
-   0x004C payload → updates `DeviceState` → `App` renders battery and, on an
-   in-ear/out-of-ear transition, drives the Windows media session (pause/resume).
+   receives a BLE advertisement → `DeviceStateTracker` (Core) decodes the Apple
+   `0x004C` proximity payload with `ContinuityParser`, applies the **Phase-1
+   `IConnectionMonitor` connection gate**, a strongest-RSSI single-device
+   heuristic, and a 30 s staleness timeout, then publishes `DeviceState` via
+   `IDeviceStateProvider`. `App` renders the tray battery from it
+   (`TrayBatteryController`), and `AutoPlayPauseEngine` (Core), on a
+   both-in-ear→out transition, drives the current Windows media session via
+   `WindowsMediaController` (`IMediaController`, GSMTC) — pausing on first-bud-out
+   and resuming only media it paused. **Phase-2 telemetry and play/pause are gated
+   on Phase-1's `IConnectionMonitor`**: with no AirPods connected (or the
+   advertisement stale) the tray shows "unknown / out of range" and no play/pause
+   fires — the company id `0x004C` identifies telemetry only and never enters the
+   connection path. The composition root wires the pipeline and owns the scanner's
+   start/stop; the tracker does not.
 2. **Mic-profile policy (Tier 1):** `WindowsAudioSessionMonitor` detects a
    Communications capture session opening → Core's policy engine decides per the
    active mode (HiFi-lock / auto-switch / call-mode) → `WindowsAudioPolicy`

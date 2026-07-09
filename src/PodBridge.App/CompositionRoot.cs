@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using PodBridge.Core.Bluetooth;
+using PodBridge.Core.Media;
 using PodBridge.Windows;
 
 namespace PodBridge.App;
@@ -24,5 +26,14 @@ public static class CompositionRoot
     {
         // Core <-> Windows seam: Windows adapters register themselves here.
         services.AddWindowsAdapters();
+
+        // Core telemetry pipeline (Phase 2). Both are singletons holding live event
+        // subscriptions for the app's lifetime; the container disposes them
+        // (IDisposable) on shutdown. The tracker gates the scanner's advertisements
+        // on the Phase-1 IConnectionMonitor and publishes DeviceState; the engine
+        // drives auto play/pause from the same gated in-ear transitions. The tracker
+        // takes an optional TimeProvider that defaults to the system clock.
+        services.AddSingleton<IDeviceStateProvider, DeviceStateTracker>();
+        services.AddSingleton<AutoPlayPauseEngine>();
     }
 }
