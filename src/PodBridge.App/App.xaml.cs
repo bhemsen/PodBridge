@@ -1,6 +1,7 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Media;
 
@@ -21,6 +22,7 @@ public partial class App : Application
     private TrayIcon? _trayIcon;
     private TrayStatusController? _trayStatusController;
     private TrayBatteryController? _trayBatteryController;
+    private TrayAudioController? _trayAudioController;
     private IBleScanner? _bleScanner;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -42,10 +44,21 @@ public partial class App : Application
         // host is up and tear it down on exit.
         _trayIcon = TrayIcon.Create();
 
+        var monitor = _host.Services.GetRequiredService<IConnectionMonitor>();
+
+        // Surface the read-only audio state (codec + mic-mode lines, "Refresh audio
+        // status", and the confirmed-SBC guidance notification). Start it BEFORE the
+        // status controller (which starts the monitor) so its StatusChanged
+        // subscription is live for the initial connect and no on-connect read is
+        // missed. Reads happen on connect and on manual refresh only — no polling.
+        var audioReader = _host.Services.GetRequiredService<IAudioStateReader>();
+        _trayAudioController = TrayAudioController.Create(
+            _trayIcon, audioReader, monitor, Dispatcher);
+        _trayAudioController.Start();
+
         // Drive the tray from live connection status and show first-run pairing
         // guidance. StatusChanged is marshalled to this (UI) dispatcher inside
         // the controller.
-        var monitor = _host.Services.GetRequiredService<IConnectionMonitor>();
         _trayStatusController = TrayStatusController.Create(
             _trayIcon, monitor, Dispatcher, new FirstRunGuidanceState());
         _trayStatusController.Start();
@@ -82,6 +95,9 @@ public partial class App : Application
         // touches a disposed tray.
         _trayBatteryController?.Dispose();
         _trayBatteryController = null;
+
+        _trayAudioController?.Dispose();
+        _trayAudioController = null;
 
         _trayStatusController?.Dispose();
         _trayStatusController = null;
