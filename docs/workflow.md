@@ -260,6 +260,8 @@ gate.
     human accepts or files regressions. For a **living-spec** milestone the gate
     runs per closed-issue batch but does **not** archive the spec or close the
     milestone — the theme stays open.
+  - Always write a testing manual before the human QA gate, with all the steps
+    necessary to run the test (see `docs/qa/phase-<n>-*.md`).
 - A `track:adhoc` issue has no milestone, so it skips both human gates; its only
   gate is the per-PR machine gate above.
 - QA-gate default check: **UI check / smoke test** (this is a Windows desktop
