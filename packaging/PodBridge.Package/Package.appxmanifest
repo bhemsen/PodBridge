@@ -20,6 +20,7 @@
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap rescap">
 
@@ -52,6 +53,32 @@
         Square44x44Logo="Images\Square44x44Logo.png">
         <uap:DefaultTile ShortName="PodBridge" />
       </uap:VisualElements>
+      <Extensions>
+        <!--
+          Opt-in auto-start-at-login (#35). Enabled="false" is the load-bearing
+          default: auto-start is OFF until the user turns it on from the About
+          surface (StartupTaskToggle over the StartupTask WinRT API). TaskId MUST
+          equal StartupTaskToggle.TaskId. A packaged desktop app enables silently
+          (no consent dialog); the user's Settings/Task-Manager disable still wins.
+
+          Executable is "PodBridge.App\PodBridge.App.exe" (subfolder), NOT the
+          bare "PodBridge.App.exe" the <Application> element carries. The .wapproj
+          publishes the ProjectReference into a project-named subfolder and, at
+          build time, rewrites ONLY the <Application>/@Executable to that resolved
+          path; it does not touch this custom Extension. MakeAppx validates the
+          Extension's Executable against the actual package layout, so it must be
+          the resolved subfolder path or packaging fails with 0x80080204.
+        -->
+        <uap5:Extension
+          Category="windows.startupTask"
+          Executable="PodBridge.App\PodBridge.App.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask
+            TaskId="PodBridgeStartup"
+            Enabled="false"
+            DisplayName="PodBridge" />
+        </uap5:Extension>
+      </Extensions>
     </Application>
   </Applications>
 

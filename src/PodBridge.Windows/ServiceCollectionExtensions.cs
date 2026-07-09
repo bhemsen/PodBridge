@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Media;
+using PodBridge.Core.Startup;
 
 namespace PodBridge.Windows;
 
@@ -13,7 +14,8 @@ namespace PodBridge.Windows;
 /// advertisement scanner and the media-session controller; Phase 3 adds the
 /// read-only audio-state reader; Phase 4 adds the mic-profile policy lever
 /// (<see cref="IAudioPolicy"/>) and the comms-capture session monitor
-/// (<see cref="IAudioSessionMonitor"/>).
+/// (<see cref="IAudioSessionMonitor"/>); Phase 5 adds the opt-in auto-start toggle
+/// (<see cref="IStartupToggle"/>).
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -57,6 +59,12 @@ public static class ServiceCollectionExtensions
         // the single-device degrade warning updates live when the fallback mic is
         // added/removed; the composition root starts and stops it.
         services.AddSingleton<IAudioEndpointChangeMonitor, WindowsAudioEndpointChangeMonitor>();
+
+        // Phase 5 opt-in auto-start-at-login (issue #35). The MSIX StartupTask toggle
+        // is stateless — it fetches the task fresh per call and holds no handle
+        // between calls (like the audio-state reader) — so it is transient. The About
+        // surface resolves it on demand to read and set the default-OFF option.
+        services.AddTransient<IStartupToggle, StartupTaskToggle>();
         return services;
     }
 }

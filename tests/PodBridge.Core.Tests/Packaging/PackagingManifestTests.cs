@@ -80,6 +80,24 @@ public class PackagingManifestTests
     }
 
     [Fact]
+    public void StartupTask_IsDeclared_DefaultDisabled()
+    {
+        // Auto-start (#35) is opt-in: the windows.startupTask extension must exist
+        // and default OFF (Enabled="false") so nothing launches at sign-in until the
+        // user turns it on from the About surface.
+        var startupTask = ByLocalName("StartupTask").Single();
+
+        Assert.Equal("PodBridgeStartup", (string?)startupTask.Attribute("TaskId"));
+        Assert.Equal("false", (string?)startupTask.Attribute("Enabled"));
+
+        // The declaring extension is the windows.startupTask category.
+        var extension = startupTask.Parent;
+        Assert.NotNull(extension);
+        Assert.Equal("Extension", extension!.Name.LocalName);
+        Assert.Equal("windows.startupTask", (string?)extension.Attribute("Category"));
+    }
+
+    [Fact]
     public void Package_ContainsNoKernelDriver()
     {
         // No driver payload referenced in the manifest ...
