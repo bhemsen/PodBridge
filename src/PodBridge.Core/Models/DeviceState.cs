@@ -48,8 +48,15 @@ public sealed record DeviceState
     /// </summary>
     public bool IsLive { get; init; }
 
-    /// <summary>True when at least one bud is in an ear (drives auto play/pause).</summary>
+    /// <summary>True when at least one bud is in an ear.</summary>
     public bool AnyInEar => LeftInEar || RightInEar;
+
+    /// <summary>
+    /// True only when both buds are in an ear. Drives auto play/pause: removing the
+    /// first bud takes this true→false (pause) and re-inserting it takes it
+    /// false→true (resume), mirroring AirPods' native "pause on first bud out".
+    /// </summary>
+    public bool BothInEar => LeftInEar && RightInEar;
 
     /// <summary>
     /// The canonical "unknown / out of range" state: not live, no battery, no

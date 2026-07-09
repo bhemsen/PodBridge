@@ -6,12 +6,13 @@ namespace PodBridge.Core.Media;
 /// <summary>
 /// Drives automatic media pause/resume from AirPods in-ear/out-of-ear transitions.
 /// Subscribes to the connection-gated <see cref="IDeviceStateProvider"/> and keys
-/// off <see cref="DeviceState.AnyInEar"/> (at least one bud in an ear):
+/// off <see cref="DeviceState.BothInEar"/> (both buds in an ear), so removing the
+/// <b>first</b> bud pauses — matching AirPods' native behaviour (spec prior decision):
 /// <list type="bullet">
-/// <item>Out-of-ear (<see cref="DeviceState.AnyInEar"/> true→false): pause the
+/// <item>First bud out (<see cref="DeviceState.BothInEar"/> true→false): pause the
 /// current media <b>only if it is playing</b>, and record "paused-by-us".</item>
-/// <item>In-ear (<see cref="DeviceState.AnyInEar"/> false→true): resume <b>only if
-/// PodBridge recorded the pause</b> — never resume media the user paused.</item>
+/// <item>Both buds back in (<see cref="DeviceState.BothInEar"/> false→true): resume
+/// <b>only if PodBridge recorded the pause</b> — never resume media the user paused.</item>
 /// </list>
 /// <para>
 /// Connection gate: no pause/resume ever fires unless <see cref="IConnectionMonitor"/>
@@ -28,7 +29,7 @@ public sealed class AutoPlayPauseEngine : IDisposable
     private readonly IConnectionMonitor _connectionMonitor;
     private readonly Lock _gate = new();
 
-    private bool _anyInEar;
+    private bool _bothInEar;
     private bool _pausedByUs;
 
     /// <summary>
@@ -51,7 +52,7 @@ public sealed class AutoPlayPauseEngine : IDisposable
         _stateProvider = stateProvider;
         _mediaController = mediaController;
         _connectionMonitor = connectionMonitor;
-        _anyInEar = stateProvider.Current.AnyInEar;
+        _bothInEar = stateProvider.Current.BothInEar;
         _stateProvider.StateChanged += OnStateChanged;
     }
 
@@ -73,13 +74,13 @@ public sealed class AutoPlayPauseEngine : IDisposable
 
         lock (_gate)
         {
-            var nowInEar = state.AnyInEar;
-            if (nowInEar == _anyInEar)
+            var bothInEar = state.BothInEar;
+            if (bothInEar == _bothInEar)
             {
-                return; // no in/out transition
+                return; // no first-bud-out / both-back-in transition
             }
 
-            if (nowInEar)
+            if (bothInEar)
             {
                 ResumeIfWePausedLocked();
             }
@@ -88,11 +89,11 @@ public sealed class AutoPlayPauseEngine : IDisposable
                 PauseIfPlayingLocked();
             }
 
-            _anyInEar = nowInEar;
+            _bothInEar = bothInEar;
         }
     }
 
-    // Bud removed: pause only while media is actually playing; remember we did it.
+    // First bud out: pause only while media is actually playing; remember we did it.
     private void PauseIfPlayingLocked()
     {
         if (_mediaController.GetPlaybackState() == PlaybackState.Playing)
@@ -102,7 +103,7 @@ public sealed class AutoPlayPauseEngine : IDisposable
         }
     }
 
-    // Bud re-inserted: resume only the media PodBridge itself paused.
+    // Both buds back in: resume only the media PodBridge itself paused.
     private void ResumeIfWePausedLocked()
     {
         if (_pausedByUs)

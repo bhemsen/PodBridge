@@ -24,8 +24,13 @@ internal sealed class FakeDeviceStateProvider : IDeviceStateProvider
     }
 
     /// <summary>
-    /// Publishes a live state whose <see cref="DeviceState.AnyInEar"/> is
-    /// <paramref name="inEar"/> (models one bud in/out of an ear).
+    /// Publishes a live state with the given per-bud in-ear flags, so a test can
+    /// stage one bud out (e.g. <c>left: true, right: false</c>) distinctly from both
+    /// out — the distinction the auto play/pause trigger depends on.
     /// </summary>
-    public void SetInEar(bool inEar) => Publish(new DeviceState { LeftInEar = inEar, IsLive = true });
+    public void SetInEar(bool left, bool right)
+        => Publish(new DeviceState { LeftInEar = left, RightInEar = right, IsLive = true });
+
+    /// <summary>Publishes a live state with both buds either in an ear or both out.</summary>
+    public void SetBothInEar(bool inEar) => SetInEar(inEar, inEar);
 }
