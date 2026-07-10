@@ -30,8 +30,10 @@ namespace PodBridge.App;
 /// radio group driven by <see cref="TrayNoiseControlController"/>
 /// (<see cref="SetNoiseControlModeHandler"/>, <see cref="SetSelectedNoiseControlMode"/>,
 /// <see cref="SetNoiseControlAvailability"/>); when the optional advanced-tier driver is
-/// absent the modes are disabled and an honest explanation plus an "enable advanced
-/// tier" affordance (opens the docs) are shown instead — never silently broken. An
+/// absent the modes are disabled and an honest explanation plus an "Enable advanced
+/// tier…" affordance (wired via <see cref="SetEnableAdvancedTierHandler"/> to the honest
+/// warning + explicit elevated install step; falls back to the docs) are shown instead —
+/// never silently broken. An
 /// "About PodBridge" entry opens the About window via
 /// the handler wired with <see cref="SetAboutHandler"/>. The tooltip stays concise
 /// (status + battery only); the audio surface lives in the menu. First-run pairing
@@ -69,6 +71,7 @@ public sealed class TrayIcon : IDisposable
     private Action<MicPolicyMode>? _micModeHandler;
     private Action? _callModeToggleHandler;
     private Action<NoiseControlMode>? _noiseControlModeHandler;
+    private Action? _enableAdvancedTierHandler;
     private Action? _aboutHandler;
 
     private TrayIcon()
@@ -204,6 +207,15 @@ public sealed class TrayIcon : IDisposable
         => _noiseControlModeHandler = onModeSelected;
 
     /// <summary>
+    /// Wires the callback invoked by the "Enable advanced tier…" affordance shown when the
+    /// optional advanced-tier driver is absent. The handler owns the honest warning and the
+    /// explicit, user-triggered elevated install step (the app stays <c>asInvoker</c>). If no
+    /// handler is wired, the item falls back to opening the advanced-tier documentation. Call
+    /// on the UI thread.
+    /// </summary>
+    public void SetEnableAdvancedTierHandler(Action handler) => _enableAdvancedTierHandler = handler;
+
+    /// <summary>
     /// Checks exactly the submenu item for <paramref name="mode"/> (radio behaviour), or
     /// clears all checks when <paramref name="mode"/> is <see langword="null"/> (unknown /
     /// not yet read). Reflects the optimistic and confirmed/reverted mode. Call on the UI
@@ -336,11 +348,21 @@ public sealed class TrayIcon : IDisposable
     }
 
     // The advanced tier ships as a separate, user-triggered install (its own driver INF
-    // + test-cert trust — see docs/specs/spec-advanced-driver-anc.md). There is no
-    // in-app installer, so the honest affordance opens the project docs that explain the
-    // opt-in steps and their security trade-off; it never elevates or installs anything.
-    private static void OnEnableAdvancedTier(object sender, RoutedEventArgs e)
-        => OpenUri(ProductInfo.DocsUrl, "Could not open the PodBridge documentation.");
+    // + test-cert trust — see docs/specs/spec-advanced-driver-anc.md). The wired handler
+    // (App) shows the honest security warning and launches the ELEVATED install step on
+    // explicit confirmation; the app itself stays asInvoker and never auto-elevates. With
+    // no handler wired, the item falls back to opening the advanced-tier docs — it never
+    // elevates or installs anything on its own.
+    private void OnEnableAdvancedTier(object sender, RoutedEventArgs e)
+    {
+        if (_enableAdvancedTierHandler is not null)
+        {
+            _enableAdvancedTierHandler();
+            return;
+        }
+
+        OpenUri(ProductInfo.AdvancedTierDocsUrl, "Could not open the PodBridge documentation.");
+    }
 
     private void OnCallModeToggle(object sender, RoutedEventArgs e)
         => _callModeToggleHandler?.Invoke();

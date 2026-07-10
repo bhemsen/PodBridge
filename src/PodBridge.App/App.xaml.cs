@@ -1,8 +1,11 @@
+using System.Diagnostics;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using PodBridge.Core.AdvancedTier;
 using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
+using PodBridge.Core.Branding;
 using PodBridge.Core.Media;
 using PodBridge.Core.Protocol;
 using PodBridge.Core.Startup;
@@ -141,6 +144,62 @@ public partial class App : Application
         _trayNoiseControlController = TrayNoiseControlController.Create(
             _trayIcon!, controller, stateProvider, Dispatcher);
         _trayNoiseControlController.Start();
+
+        // The driver-absent "Enable advanced tier…" affordance: show the honest security
+        // warning, then — only on explicit confirmation — launch the SEPARATE, ELEVATED
+        // install step. The app stays asInvoker; it never auto-elevates or installs silently.
+        _trayIcon!.SetEnableAdvancedTierHandler(EnableAdvancedTier);
+    }
+
+    // Explicit, user-triggered opt-in. Warns about BOTH machine-wide load requirements
+    // (test-signing mode — which the user enables themselves; PodBridge never runs bcdedit —
+    // and trusting the self-signed test cert) and the trade-off, then launches the elevated
+    // installer (IAdvancedTierInstaller). When the driver package is absent (it ships
+    // separately, never bundled), it guides the user to the advanced-tier docs instead.
+    private void EnableAdvancedTier()
+    {
+        var proceed = MessageBox.Show(
+            AdvancedTierInfo.SecurityWarning,
+            AdvancedTierInfo.Title,
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+        if (proceed != MessageBoxResult.OK)
+        {
+            return; // opt-in: declining changes nothing.
+        }
+
+        var result = _host!.Services.GetRequiredService<IAdvancedTierInstaller>().Install();
+        switch (result)
+        {
+            case AdvancedTierActionResult.Launched:
+                _trayIcon!.ShowNotification(AdvancedTierInfo.Title, AdvancedTierInfo.LaunchedFollowUp);
+                break;
+            case AdvancedTierActionResult.PackageMissing:
+                _trayIcon!.ShowNotification(AdvancedTierInfo.Title, AdvancedTierInfo.PackageMissingFollowUp);
+                OpenAdvancedTierDocs();
+                break;
+            case AdvancedTierActionResult.Cancelled:
+            default:
+                break; // user declined the UAC prompt.
+        }
+    }
+
+    // Opens the advanced-tier guide (the two load requirements + their trade-off) in the
+    // browser. Shell-launch failures are non-fatal — the tray keeps running.
+    private static void OpenAdvancedTierDocs()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(ProductInfo.AdvancedTierDocsUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            MessageBox.Show(
+                "Could not open the PodBridge advanced-tier documentation.",
+                "PodBridge",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     // Opens the About window (the app's first non-tray window) from the tray "About"

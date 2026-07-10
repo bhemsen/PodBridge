@@ -60,4 +60,12 @@ public static class ProductInfo
 
     /// <summary>Link to the in-repo user documentation (no hosted docs site).</summary>
     public const string DocsUrl = "https://github.com/bhemsen/PodBridge/tree/main/docs";
+
+    /// <summary>
+    /// Link to the OPTIONAL advanced-tier guide (noise-control driver: opt-in install,
+    /// the two x64 load requirements + their security trade-off). The "Enable advanced
+    /// tier" affordance opens this when the driver package isn't present locally.
+    /// </summary>
+    public const string AdvancedTierDocsUrl =
+        "https://github.com/bhemsen/PodBridge/blob/main/docs/user/advanced-tier.md";
 }

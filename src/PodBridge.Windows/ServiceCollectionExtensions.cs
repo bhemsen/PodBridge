@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using PodBridge.Core.AdvancedTier;
 using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Media;
@@ -75,6 +76,13 @@ public static class ServiceCollectionExtensions
         // lifetime; the container disposes it (IDisposable) on shutdown. It is the ONLY
         // component that talks to the driver.
         services.AddSingleton<IAapTransport, DriverAapTransport>();
+
+        // Phase 6 advanced-tier opt-in install step (issue #45). Stateless — it holds no
+        // handle between calls (it locates the separate install script and launches it
+        // elevated on an explicit user action) — so it is transient, like the other
+        // per-call adapters. It NEVER elevates the app (asInvoker) and NEVER runs bcdedit;
+        // it is invoked only from the App's explicit "Enable advanced tier" affordance.
+        services.AddTransient<IAdvancedTierInstaller, AdvancedTierInstaller>();
         return services;
     }
 }

@@ -12,8 +12,10 @@ automatic play/pause, honest audio guidance and a microphone-profile policy, all
 This guide covers the **driver-free MVP** (Tier 1): install, the ≤ 2-minute
 fresh-install-to-battery-visible setup, the honest audio and microphone caveats,
 the microphone-profile modes, the start-with-Windows toggle, and uninstall. The
-optional advanced tier (noise-control switching, gesture remap) needs a separate
-opt-in driver and is out of scope here.
+optional **advanced tier** (noise-control switching) needs a separate opt-in
+driver and two machine-wide security changes; it is documented separately in the
+[**advanced-tier guide**](advanced-tier.md) and summarised under
+[Advanced tier (optional)](#advanced-tier-optional) below.
 
 ---
 
@@ -117,6 +119,10 @@ Right-click the tray icon. The menu (top to bottom):
 - **`Codec: …`** — the negotiated audio codec (see [Audio honesty](#audio-honesty-aac-vs-sbc)). *(display only)*
 - **`Mic: …`** — the current microphone link mode (see [The microphone trade-off](#the-microphone-trade-off-a2dphfp)). *(display only)*
 - **`Microphone mode`** — submenu to choose the mic-profile policy (below).
+- **`Noise control`** — submenu to switch Off / Noise Cancellation / Transparency /
+  Adaptive. Requires the optional [advanced tier](#advanced-tier-optional); until
+  its driver is installed the modes are disabled with an honest explanation and an
+  **`Enable advanced tier…`** entry.
 - **`Refresh audio status`** — re-reads the codec and mic lines on demand.
 - **`Pair / Reconnect`** — opens Windows Bluetooth settings to add or reconnect AirPods.
 - **`Open Bluetooth settings`** — opens Windows Bluetooth settings.
@@ -219,6 +225,34 @@ Startup**.
 version, the **not-affiliated disclaimer**, the honest audio/mic note, the
 **Apache-2.0** license and third-party notices, and links to the user
 documentation and project page.
+
+---
+
+## Advanced tier (optional)
+
+Everything above is **Tier 1** — driver-free, no admin. The optional **advanced
+tier** adds **noise-control switching** (Off / Noise Cancellation / Transparency /
+Adaptive) from the tray on supported AirPods (reference model AirPods Pro 2).
+
+It is **not** part of the default experience and is **not** required for any
+Tier-1 feature. Because Windows only lets a **kernel driver** reach the AirPods
+noise-control channel, enabling it means installing a small driver and — honestly
+— making **two machine-wide security changes** so a **test-signed** (not
+Microsoft-signed) driver can load on 64-bit Windows:
+
+1. **Enabling test-signing mode** (`bcdedit /set testsigning on` + reboot) — a
+   manual step **you** perform; PodBridge never runs `bcdedit` for you.
+2. **Trusting a self-signed test certificate** — the opt-in installer imports it
+   into your machine's Trusted Root CA and Trusted Publishers stores.
+
+Together these lower your machine's driver-security bar until you undo them; both
+are reversible, and Tier 1 keeps working without either. PodBridge makes **no**
+claim of a Microsoft-signed driver; the attestation path (EV certificate +
+Partner Center) is a deferred, out-of-scope option.
+
+The full opt-in install / uninstall flow, the security trade-off, and how to
+start it from the tray (**Noise control → Enable advanced tier…**) are in the
+[**advanced-tier guide**](advanced-tier.md).
 
 ---
 

@@ -10,6 +10,14 @@ Packaging Project in [`PodBridge.Package/`](PodBridge.Package/) by the
 `windows-latest`. See [`docs/research/msix-packaging.md`](../docs/research/msix-packaging.md)
 for the packaging/signing facts this is built on.
 
+> **The optional advanced-tier driver is never in this MSIX.** MSIX cannot
+> cleanly carry a kernel driver, and the driver is a strictly opt-in, separately
+> installed add-on. It builds with the WDK (`driver/PodBridgeAAP/build-testsign.ps1`)
+> and installs via its own elevated flow
+> (`driver/PodBridgeAAP/install-advanced-tier.ps1`: `pnputil` + self-signed
+> test-cert trust). End-user docs: [`docs/user/advanced-tier.md`](../docs/user/advanced-tier.md);
+> design: [`docs/specs/spec-advanced-driver-anc.md`](../docs/specs/spec-advanced-driver-anc.md).
+
 ## Two distribution channels
 
 | Channel | Signing | Admin to install? | When live |
