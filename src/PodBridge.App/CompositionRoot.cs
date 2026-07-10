@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Media;
+using PodBridge.Core.Protocol;
 using PodBridge.Windows;
 
 namespace PodBridge.App;
@@ -43,5 +44,14 @@ public static class CompositionRoot
         // host and Auto-switch reacts live to comms-capture sessions; the tray drives
         // its mode + Call-mode toggle and reflects the single-device degrade warning.
         services.AddSingleton<MicPolicyEngine>();
+
+        // Phase 6 Tier-2 noise-control state machine (issue #44). Core logic driving the
+        // opt-in IAapTransport with the optimistic-set / echo-confirm / timeout-revert
+        // model; the tray (TrayNoiseControlController) is its only consumer. A singleton
+        // holding the current confirmed mode for the app's lifetime. Built via a factory
+        // so the transport is bound explicitly and the confirm-timeout / clock defaults
+        // apply; with the driver absent it reports IsAvailable == false and sends nothing
+        // (constitution: graceful degradation).
+        services.AddSingleton(sp => new NoiseControlController(sp.GetRequiredService<IAapTransport>()));
     }
 }

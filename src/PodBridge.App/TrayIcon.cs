@@ -6,6 +6,8 @@ using System.Windows.Media.Imaging;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using PodBridge.Core.Audio;
+using PodBridge.Core.Branding;
+using PodBridge.Core.Models;
 
 namespace PodBridge.App;
 
@@ -23,7 +25,14 @@ namespace PodBridge.App;
 /// a Call-mode toggle and the honest single-device degrade warning line, driven by
 /// <see cref="TrayMicController"/> (<see cref="SetMicPolicyHandlers"/>,
 /// <see cref="SetSelectedMicMode"/>, <see cref="SetCallModeActive"/>,
-/// <see cref="SetMicWarning"/>). An "About PodBridge" entry opens the About window via
+/// <see cref="SetMicWarning"/>). A "Noise control" submenu (Tier 2, opt-in) exposes the
+/// AAP noise-control modes (Off / Noise Cancellation / Transparency / Adaptive) as a
+/// radio group driven by <see cref="TrayNoiseControlController"/>
+/// (<see cref="SetNoiseControlModeHandler"/>, <see cref="SetSelectedNoiseControlMode"/>,
+/// <see cref="SetNoiseControlAvailability"/>); when the optional advanced-tier driver is
+/// absent the modes are disabled and an honest explanation plus an "enable advanced
+/// tier" affordance (opens the docs) are shown instead — never silently broken. An
+/// "About PodBridge" entry opens the About window via
 /// the handler wired with <see cref="SetAboutHandler"/>. The tooltip stays concise
 /// (status + battery only); the audio surface lives in the menu. First-run pairing
 /// guidance and the SBC guidance are surfaced through <see cref="ShowNotification"/>.
@@ -45,12 +54,21 @@ public sealed class TrayIcon : IDisposable
     private readonly MenuItem _callModeModeItem;
     private readonly MenuItem _callModeToggleItem;
     private readonly MenuItem _micWarningItem;
+    private readonly MenuItem _noiseControlMenu;
+    private readonly MenuItem _ncOffItem;
+    private readonly MenuItem _ncAncItem;
+    private readonly MenuItem _ncTransparencyItem;
+    private readonly MenuItem _ncAdaptiveItem;
+    private readonly Separator _ncUnavailableSeparator;
+    private readonly MenuItem _ncUnavailableItem;
+    private readonly MenuItem _ncEnableTierItem;
 
     private string _statusText = Placeholder;
     private string _batteryText = Placeholder;
     private Action? _refreshAudioHandler;
     private Action<MicPolicyMode>? _micModeHandler;
     private Action? _callModeToggleHandler;
+    private Action<NoiseControlMode>? _noiseControlModeHandler;
     private Action? _aboutHandler;
 
     private TrayIcon()
@@ -66,6 +84,15 @@ public sealed class TrayIcon : IDisposable
         _callModeToggleItem.Click += OnCallModeToggle;
         _micWarningItem = new MenuItem { IsEnabled = false, Visibility = Visibility.Collapsed };
         _micPolicyMenu = BuildMicPolicyMenu();
+        _ncOffItem = CreateNoiseControlItem("Off", NoiseControlMode.Off);
+        _ncAncItem = CreateNoiseControlItem("Noise Cancellation", NoiseControlMode.NoiseCancellation);
+        _ncTransparencyItem = CreateNoiseControlItem("Transparency", NoiseControlMode.Transparency);
+        _ncAdaptiveItem = CreateNoiseControlItem("Adaptive", NoiseControlMode.Adaptive);
+        _ncUnavailableSeparator = new Separator { Visibility = Visibility.Collapsed };
+        _ncUnavailableItem = new MenuItem { IsEnabled = false, Visibility = Visibility.Collapsed };
+        _ncEnableTierItem = new MenuItem { Header = "Enable advanced tier…", Visibility = Visibility.Collapsed };
+        _ncEnableTierItem.Click += OnEnableAdvancedTier;
+        _noiseControlMenu = BuildNoiseControlMenu();
         _icon = new TaskbarIcon
         {
             ToolTipText = "PodBridge",
@@ -169,6 +196,51 @@ public sealed class TrayIcon : IDisposable
     }
 
     /// <summary>
+    /// Wires the callback invoked when a noise-control mode is picked from the "Noise
+    /// control" submenu. The controller applies it optimistically and confirms/reverts
+    /// on the device echo. Call on the UI thread.
+    /// </summary>
+    public void SetNoiseControlModeHandler(Action<NoiseControlMode> onModeSelected)
+        => _noiseControlModeHandler = onModeSelected;
+
+    /// <summary>
+    /// Checks exactly the submenu item for <paramref name="mode"/> (radio behaviour), or
+    /// clears all checks when <paramref name="mode"/> is <see langword="null"/> (unknown /
+    /// not yet read). Reflects the optimistic and confirmed/reverted mode. Call on the UI
+    /// thread.
+    /// </summary>
+    public void SetSelectedNoiseControlMode(NoiseControlMode? mode)
+    {
+        _ncOffItem.IsChecked = mode == NoiseControlMode.Off;
+        _ncAncItem.IsChecked = mode == NoiseControlMode.NoiseCancellation;
+        _ncTransparencyItem.IsChecked = mode == NoiseControlMode.Transparency;
+        _ncAdaptiveItem.IsChecked = mode == NoiseControlMode.Adaptive;
+    }
+
+    /// <summary>
+    /// Reflects the Tier-2 transport availability in the submenu (constitution: graceful
+    /// degradation, honest UX). When <paramref name="available"/>, the modes are
+    /// selectable and Adaptive is enabled only if <paramref name="adaptiveSupported"/>
+    /// (model gate). When not available, all modes are disabled and an honest
+    /// explanation (<paramref name="unavailableText"/>) plus the "Enable advanced tier…"
+    /// affordance are shown instead. Call on the UI thread.
+    /// </summary>
+    public void SetNoiseControlAvailability(bool available, bool adaptiveSupported, string unavailableText)
+    {
+        _ncOffItem.IsEnabled = available;
+        _ncAncItem.IsEnabled = available;
+        _ncTransparencyItem.IsEnabled = available;
+        // Adaptive is additionally gated on the connected model (Pro 2); the rest are not.
+        _ncAdaptiveItem.IsEnabled = available && adaptiveSupported;
+
+        var absent = available ? Visibility.Collapsed : Visibility.Visible;
+        _ncUnavailableItem.Header = unavailableText;
+        _ncUnavailableSeparator.Visibility = absent;
+        _ncUnavailableItem.Visibility = absent;
+        _ncEnableTierItem.Visibility = absent;
+    }
+
+    /// <summary>
     /// Shows a Windows balloon/toast notification from the tray icon. Used for
     /// one-time first-run pairing guidance and the confirmed-SBC audio guidance. Call
     /// on the UI thread.
@@ -193,6 +265,7 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(_micItem);
         menu.Items.Add(new Separator());
         menu.Items.Add(_micPolicyMenu);
+        menu.Items.Add(_noiseControlMenu);
         menu.Items.Add(CreateItem("Refresh audio status", OnRefreshAudio));
         // Phase 1: "Pair / Reconnect" deep-links to Bluetooth settings like
         // "Open Bluetooth settings"; issue #7 gives it live reconnect behaviour.
@@ -236,6 +309,39 @@ public sealed class TrayIcon : IDisposable
         return item;
     }
 
+    // The "Noise control" submenu (Tier 2, opt-in): four checkable modes (radio) driven
+    // by the device echo, then a collapsed driver-absent block — an honest explanation
+    // line plus an "Enable advanced tier…" affordance — that the controller reveals when
+    // the transport is unavailable (constitution: graceful degradation, never silent).
+    private MenuItem BuildNoiseControlMenu()
+    {
+        var menu = new MenuItem { Header = "Noise control" };
+        menu.Items.Add(_ncOffItem);
+        menu.Items.Add(_ncAncItem);
+        menu.Items.Add(_ncTransparencyItem);
+        menu.Items.Add(_ncAdaptiveItem);
+        menu.Items.Add(_ncUnavailableSeparator);
+        menu.Items.Add(_ncUnavailableItem);
+        menu.Items.Add(_ncEnableTierItem);
+        return menu;
+    }
+
+    private MenuItem CreateNoiseControlItem(string header, NoiseControlMode mode)
+    {
+        var item = new MenuItem { Header = header, IsCheckable = true };
+        // The controller re-asserts the checks from the confirmed/optimistic mode, so a
+        // click never leaves the radio group in a state the device did not confirm.
+        item.Click += (_, _) => _noiseControlModeHandler?.Invoke(mode);
+        return item;
+    }
+
+    // The advanced tier ships as a separate, user-triggered install (its own driver INF
+    // + test-cert trust — see docs/specs/spec-advanced-driver-anc.md). There is no
+    // in-app installer, so the honest affordance opens the project docs that explain the
+    // opt-in steps and their security trade-off; it never elevates or installs anything.
+    private static void OnEnableAdvancedTier(object sender, RoutedEventArgs e)
+        => OpenUri(ProductInfo.DocsUrl, "Could not open the PodBridge documentation.");
+
     private void OnCallModeToggle(object sender, RoutedEventArgs e)
         => _callModeToggleHandler?.Invoke();
 
@@ -246,24 +352,24 @@ public sealed class TrayIcon : IDisposable
         => _aboutHandler?.Invoke();
 
     private static void OnOpenBluetoothSettings(object sender, RoutedEventArgs e)
-        => OpenBluetoothSettings();
+        => OpenUri(BluetoothSettingsUri, "Could not open Windows Bluetooth settings.");
 
     private static void OnExit(object sender, RoutedEventArgs e)
         => Application.Current.Shutdown();
 
-    private static void OpenBluetoothSettings()
+    // Shell-launches a URI (a Bluetooth-settings deep link or an https docs page),
+    // surfacing a non-fatal warning if the shell cannot handle it. Used for the
+    // "Open Bluetooth settings" / "Pair / Reconnect" entries and the noise-control
+    // "Enable advanced tier…" affordance.
+    private static void OpenUri(string uri, string failMessage)
     {
         try
         {
-            Process.Start(new ProcessStartInfo(BluetoothSettingsUri) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
-            MessageBox.Show(
-                "Could not open Windows Bluetooth settings.",
-                "PodBridge",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            MessageBox.Show(failMessage, "PodBridge", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 }

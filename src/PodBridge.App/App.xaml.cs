@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Media;
+using PodBridge.Core.Protocol;
 using PodBridge.Core.Startup;
 
 namespace PodBridge.App;
@@ -26,6 +27,7 @@ public partial class App : Application
     private TrayBatteryController? _trayBatteryController;
     private TrayAudioController? _trayAudioController;
     private TrayMicController? _trayMicController;
+    private TrayNoiseControlController? _trayNoiseControlController;
     private IBleScanner? _bleScanner;
     private IAudioSessionMonitor? _audioSessionMonitor;
     private IAudioEndpointChangeMonitor? _audioEndpointChangeMonitor;
@@ -71,6 +73,7 @@ public partial class App : Application
 
         StartTelemetryPipeline();
         StartMicPolicyPipeline();
+        StartNoiseControlPipeline();
     }
 
     // Wires and starts the Phase-2 connection-gated Tier-1 pipeline
@@ -123,6 +126,23 @@ public partial class App : Application
         _audioEndpointChangeMonitor.Start();
     }
 
+    // Wires the Phase-6 Tier-2 noise-control submenu (issue #44). Resolves the Core
+    // NoiseControlController (driving the opt-in IAapTransport) and the shared
+    // IDeviceStateProvider (for the Adaptive model gate + connection-driven AAP session
+    // start). With the advanced-tier driver absent — the Tier-1 default — the transport
+    // reports IsAvailable == false, so the controller renders the submenu as disabled
+    // with an honest explanation and never sends a frame or requests elevation.
+    private void StartNoiseControlPipeline()
+    {
+        var services = _host!.Services;
+
+        var controller = services.GetRequiredService<NoiseControlController>();
+        var stateProvider = services.GetRequiredService<IDeviceStateProvider>();
+        _trayNoiseControlController = TrayNoiseControlController.Create(
+            _trayIcon!, controller, stateProvider, Dispatcher);
+        _trayNoiseControlController.Start();
+    }
+
     // Opens the About window (the app's first non-tray window) from the tray "About"
     // entry. A single instance is reused: if it is already open, bring it to the
     // front rather than stacking duplicates. Runs on the UI dispatcher (the tray
@@ -159,6 +179,11 @@ public partial class App : Application
         // is disposed, so no late warning event touches a disposed tray.
         _trayMicController?.Dispose();
         _trayMicController = null;
+
+        // Unsubscribe the noise-control controller before its Core controller (a container
+        // singleton) is disposed, so no late ModeChanged/StateChanged touches a disposed tray.
+        _trayNoiseControlController?.Dispose();
+        _trayNoiseControlController = null;
 
         _trayStatusController?.Dispose();
         _trayStatusController = null;
