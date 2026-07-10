@@ -66,6 +66,7 @@ public sealed class TrayIcon : IDisposable
     private readonly Separator _ncUnavailableSeparator;
     private readonly MenuItem _ncUnavailableItem;
     private readonly MenuItem _ncEnableTierItem;
+    private readonly MenuItem _debugLoggingItem;
 
     private string _statusText = Placeholder;
     private string _batteryText = Placeholder;
@@ -75,6 +76,8 @@ public sealed class TrayIcon : IDisposable
     private Action<NoiseControlMode>? _noiseControlModeHandler;
     private Action? _enableAdvancedTierHandler;
     private Action? _gestureSettingsHandler;
+    private Action? _exportDiagnosticsHandler;
+    private Action<bool>? _debugLoggingHandler;
     private Action? _aboutHandler;
 
     private TrayIcon()
@@ -99,6 +102,8 @@ public sealed class TrayIcon : IDisposable
         _ncEnableTierItem = new MenuItem { Header = "Enable advanced tier…", Visibility = Visibility.Collapsed };
         _ncEnableTierItem.Click += OnEnableAdvancedTier;
         _noiseControlMenu = BuildNoiseControlMenu();
+        _debugLoggingItem = new MenuItem { Header = "Debug logging", IsCheckable = true };
+        _debugLoggingItem.Click += OnDebugLoggingToggle;
         _icon = new TaskbarIcon
         {
             ToolTipText = "PodBridge",
@@ -161,6 +166,24 @@ public sealed class TrayIcon : IDisposable
     /// About window). Call on the UI thread.
     /// </summary>
     public void SetAboutHandler(Action handler) => _aboutHandler = handler;
+
+    /// <summary>
+    /// Wires the diagnostics/logging menu actions: <paramref name="onExport"/> fires for
+    /// the "Export diagnostics" entry (writes a local file + copies to clipboard);
+    /// <paramref name="onDebugToggle"/> fires with the new checked state of the "Debug
+    /// logging" toggle (raises the local file sink's verbosity only). Call on the UI thread.
+    /// </summary>
+    public void SetDiagnosticsHandlers(Action onExport, Action<bool> onDebugToggle)
+    {
+        _exportDiagnosticsHandler = onExport;
+        _debugLoggingHandler = onDebugToggle;
+    }
+
+    /// <summary>
+    /// Reflects the current Debug-logging state as the toggle item's check, so the menu
+    /// matches the local file sink's verbosity. Call on the UI thread.
+    /// </summary>
+    public void SetDebugLoggingChecked(bool enabled) => _debugLoggingItem.IsChecked = enabled;
 
     /// <summary>
     /// Wires the callback invoked by the "Gesture controls…" menu action (opens the Tier-2
@@ -295,6 +318,8 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(CreateItem("Open Bluetooth settings", OnOpenBluetoothSettings));
         menu.Items.Add(new Separator());
         menu.Items.Add(CreateItem("Gesture controls…", OnGestureSettings));
+        menu.Items.Add(CreateItem("Export diagnostics", OnExportDiagnostics));
+        menu.Items.Add(_debugLoggingItem);
         menu.Items.Add(CreateItem("About PodBridge", OnAbout));
         menu.Items.Add(CreateItem("Exit", OnExit));
         return menu;
@@ -383,6 +408,14 @@ public sealed class TrayIcon : IDisposable
 
     private void OnGestureSettings(object sender, RoutedEventArgs e)
         => _gestureSettingsHandler?.Invoke();
+
+    private void OnExportDiagnostics(object sender, RoutedEventArgs e)
+        => _exportDiagnosticsHandler?.Invoke();
+
+    // The checkable item flips its own IsChecked before Click fires, so the current state
+    // is the user's intent; the handler raises the local file sink's verbosity accordingly.
+    private void OnDebugLoggingToggle(object sender, RoutedEventArgs e)
+        => _debugLoggingHandler?.Invoke(_debugLoggingItem.IsChecked);
 
     private void OnAbout(object sender, RoutedEventArgs e)
         => _aboutHandler?.Invoke();

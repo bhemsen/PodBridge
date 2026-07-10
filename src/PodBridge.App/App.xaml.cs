@@ -6,9 +6,11 @@ using PodBridge.Core.AdvancedTier;
 using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Branding;
+using PodBridge.Core.Diagnostics;
 using PodBridge.Core.Media;
 using PodBridge.Core.Protocol;
 using PodBridge.Core.Startup;
+using PodBridge.Windows.Logging;
 
 namespace PodBridge.App;
 
@@ -32,6 +34,7 @@ public partial class App : Application
     private TrayAudioController? _trayAudioController;
     private TrayMicController? _trayMicController;
     private TrayNoiseControlController? _trayNoiseControlController;
+    private TrayDiagnosticsController? _trayDiagnosticsController;
     private IBleScanner? _bleScanner;
     private BleScannerSupervisor? _bleScannerSupervisor;
     private IBluetoothRadioSource? _radioSource;
@@ -82,6 +85,29 @@ public partial class App : Application
         StartTelemetryPipeline();
         StartMicPolicyPipeline();
         StartNoiseControlPipeline();
+        StartDiagnostics();
+    }
+
+    // Wires the tray "Export diagnostics" action and the "Debug logging" toggle (issue #54).
+    // The snapshot factory reads the live Core state on demand; the exporter writes a local,
+    // address-masked, secret-free file (constitution: local-only); the same
+    // RollingFileLoggerProvider singleton that is the app's only log sink backs the Debug
+    // toggle's runtime MinLevel flip (local file only, never a network effect).
+    private void StartDiagnostics()
+    {
+        var services = _host!.Services;
+        _trayDiagnosticsController = TrayDiagnosticsController.Create(
+            _trayIcon!,
+            services.GetRequiredService<IDiagnosticsSnapshotFactory>(),
+            services.GetRequiredService<IDiagnosticsExporter>(),
+            services.GetRequiredService<RollingFileLoggerProvider>(),
+            Dispatcher);
+        _trayDiagnosticsController.Start();
+
+        // Resolve the BLE-parse-history recorder so its subscription to the raw scanner is
+        // live from startup (it feeds the diagnostics snapshot's recent-parse section). The
+        // container owns and disposes it (unsubscribing) on shutdown.
+        _ = services.GetRequiredService<IBleParseHistory>();
     }
 
     // Wires and starts the Phase-2 connection-gated Tier-1 pipeline
@@ -293,6 +319,10 @@ public partial class App : Application
 
         _trayStatusController?.Dispose();
         _trayStatusController = null;
+
+        // The diagnostics controller owns no subscription (it only wired tray handlers), so
+        // dropping the reference is enough; the container disposes its resolved services.
+        _trayDiagnosticsController = null;
 
         // Stop the radio source first so no radio transition drives a restart during
         // teardown, then dispose the supervisor (unsubscribing it) and stop scanning so no

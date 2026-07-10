@@ -11,6 +11,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    <!-- issue #54: the minimal custom rolling-file ILoggerProvider (Logging/RollingFileLoggerProvider.cs)
+         implements ILoggerProvider/ILogger from this pure abstractions package (MIT, local-only,
+         no OS/network coupling) rather than adding a third-party logging-sink dependency. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
   </ItemGroup>
 
   <!-- The device-independent transport tests substitute a fake at the Win32 driver seam,

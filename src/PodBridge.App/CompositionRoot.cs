@@ -1,10 +1,14 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
+using PodBridge.Core.Capabilities;
+using PodBridge.Core.Diagnostics;
 using PodBridge.Core.Media;
 using PodBridge.Core.Protocol;
 using PodBridge.Windows;
+using PodBridge.Windows.Logging;
 
 namespace PodBridge.App;
 
@@ -28,6 +32,31 @@ public static class CompositionRoot
     {
         // Core <-> Windows seam: Windows adapters register themselves here.
         services.AddWindowsAdapters();
+
+        // Phase 8 structured local logging (issue #54): replace the generic host's default
+        // providers (console/debug/eventsource/eventlog) with our SINGLE rolling local-file
+        // sink — there is no console and, above all, no network sink. The same
+        // RollingFileLoggerProvider singleton (registered by AddWindowsAdapters) backs the
+        // tray "Debug logging" toggle (a runtime MinLevel flip), so verbosity is raised to
+        // the local file only (constitution: local-only, no telemetry).
+        services.AddLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.Services.AddSingleton<ILoggerProvider>(
+                sp => sp.GetRequiredService<RollingFileLoggerProvider>());
+        });
+
+        // Phase 8 diagnostics + capability model (issues #52/#53/#54). The Core model
+        // registry and capability provider are OS-free, stateless singletons; #54 is the
+        // first real consumer of ICapabilityProvider. The BLE-parse-history recorder is a
+        // Core type that subscribes to the raw IBleScanner (like DeviceStateTracker) —
+        // a singleton the container disposes (unsubscribing) on shutdown. The snapshot
+        // factory assembles the current facts on demand for the tray "Export diagnostics"
+        // action; it holds no subscription, so it is transient.
+        services.AddSingleton<IModelRegistry, ModelRegistry>();
+        services.AddSingleton<ICapabilityProvider, CapabilityProvider>();
+        services.AddSingleton<IBleParseHistory, BleParseHistoryRecorder>();
+        services.AddTransient<IDiagnosticsSnapshotFactory, DiagnosticsSnapshotFactory>();
 
         // Core telemetry pipeline (Phase 2). Both are singletons holding live event
         // subscriptions for the app's lifetime; the container disposes them
