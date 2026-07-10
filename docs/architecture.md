@@ -14,6 +14,7 @@
 | `driver/PodBridgeAAP` | Optional C / KMDF L2CAP-bridge driver exposing a user-mode device interface for AAP over PSM 0x1001. Ships separately. |
 | `packaging/PodBridge.Package` | Windows Application Packaging Project (`.wapproj`) that wraps `PodBridge.App` into a **signed MSIX** (app-only — no driver). Built by **MSBuild** on `windows-latest` (the `Package (MSIX)` workflow), deliberately kept **out of `PodBridge.slnx`** so the dotnet-based Verify gate is unaffected. Ships `Package.appxmanifest` (coined name "PodBridge", `runFullTrust`+`bluetooth` capabilities, `Windows.FullTrustApplication` = unelevated) and placeholder logos under `Images/`. |
 | `tests/PodBridge.Core.Tests` | xUnit tests exercising Core via fakes — no physical device required. |
+| `tests/PodBridge.Windows.Tests` | xUnit tests for the Windows adapters that have a device-independent seam — currently `DriverAapTransport` with a fake at the Win32 driver seam (connect/send/receive-loop/graceful-absence); no driver or hardware required. |
 
 ## Boundaries
 
@@ -66,9 +67,14 @@
    the AirPods echo notification is parsed by `AapProtocol` and confirms (or a
    timeout/mismatch reverts) → `DeviceState` updated. Driver absent → the transport
    reports `IsAvailable == false`, `ApplyTo` disables the feature in the UI, and no
-   packet is sent. **Implemented in Core** (`AapProtocol`, `NoiseControlController`,
-   `IAapTransport`; issue #41, unit-tested via a fake transport); the
-   `DriverAapTransport`/driver side and the tray UI are the remaining Tier-2 work.
+   packet is sent. **Implemented:** the Core logic (`AapProtocol`,
+   `NoiseControlController`, `IAapTransport`; issue #41, unit-tested via a fake
+   transport), the KMDF driver (`driver/PodBridgeAAP`), and — issue #43 —
+   `DriverAapTransport` (`PodBridge.Windows`), which opens the driver's device
+   interface, issues the connect/send IOCTLs, and runs a background receive loop over
+   the inverted-call receive IOCTL; it probes at startup and reports
+   `IsAvailable == false` when the driver is absent (device-independent tests fake the
+   Win32 seam). The tray UI is the remaining Tier-2 work.
 5. **Connection detection (Tier 1, driver-free):** `WinRtConnectionMonitor`
    watches paired Bluetooth-Classic association endpoints and holds a
    `BluetoothDevice` per matched AirPods (name heuristic) for its

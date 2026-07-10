@@ -13,6 +13,12 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
   </ItemGroup>
 
+  <!-- The device-independent transport tests substitute a fake at the Win32 driver seam,
+       which is internal (issue #43). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="PodBridge.Windows.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\PodBridge.Core\PodBridge.Core.csproj" />
   </ItemGroup>

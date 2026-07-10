@@ -6,5 +6,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PodBridge.Core.Tests/PodBridge.Core.Tests.csproj" />
+    <Project Path="tests/PodBridge.Windows.Tests/PodBridge.Windows.Tests.csproj" />
   </Folder>
 </Solution>
