@@ -18,6 +18,14 @@ internal sealed class FakeAudioPolicy : IAudioPolicy
     /// <summary>Every <see cref="SetDefaultEndpoint"/> call, in order.</summary>
     public IReadOnlyList<AudioPolicySetCall> SetCalls => _setCalls;
 
+    /// <summary>
+    /// When set, the next <see cref="SetDefaultEndpoint"/> for this endpoint id throws
+    /// <b>once</b> (then clears) — simulates a mid-apply endpoint-set failure (e.g. an
+    /// undocumented IPolicyConfig HRESULT surfaced as an exception) so a test can assert
+    /// the engine rolls back to the prior routing.
+    /// </summary>
+    public string? FailOnceOnEndpointId { get; set; }
+
     /// <summary>Adds an endpoint (friendly name = id for readability) and returns it.</summary>
     public AudioEndpoint Add(string id, AudioEndpointDirection direction, bool isAirPods)
     {
@@ -44,6 +52,12 @@ internal sealed class FakeAudioPolicy : IAudioPolicy
 
     public void SetDefaultEndpoint(string endpointId, AudioRole role)
     {
+        if (FailOnceOnEndpointId == endpointId)
+        {
+            FailOnceOnEndpointId = null;
+            throw new InvalidOperationException($"simulated endpoint-set failure for '{endpointId}'");
+        }
+
         var direction = _endpoints.Single(e => e.Id == endpointId).Direction;
         _defaults[(direction, role)] = endpointId;
         _setCalls.Add(new AudioPolicySetCall(endpointId, role, direction));

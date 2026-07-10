@@ -38,6 +38,14 @@ public static class CompositionRoot
         services.AddSingleton<IDeviceStateProvider, DeviceStateTracker>();
         services.AddSingleton<AutoPlayPauseEngine>();
 
+        // Phase-8 hardening (issue #55). Owns the BLE-watcher lifecycle relative to the
+        // Bluetooth-radio power state: it starts scanning unconditionally (no Tier-1
+        // regression) and, on a radio off→on toggle, restarts the scanner with a fresh
+        // watcher (the WinRT watcher does not resume scanning by itself after the radio
+        // was off). Core type driving only IBleScanner + IBluetoothRadioSource; the
+        // container disposes it (IDisposable) on shutdown, unsubscribing it.
+        services.AddSingleton<BleScannerSupervisor>();
+
         // Phase 4 mic-profile policy engine (issue #30). A singleton holding live event
         // subscriptions to IAudioSessionMonitor for the app's lifetime (disposed by the
         // container on shutdown). Constructed at startup so it runs on the background

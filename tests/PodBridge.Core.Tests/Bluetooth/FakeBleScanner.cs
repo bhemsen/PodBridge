@@ -13,9 +13,23 @@ internal sealed class FakeBleScanner : IBleScanner
 
     public bool IsRunning { get; private set; }
 
-    public void Start() => IsRunning = true;
+    /// <summary>Number of <see cref="Start"/> calls (a clean restart increments it).</summary>
+    public int StartCount { get; private set; }
 
-    public void Stop() => IsRunning = false;
+    /// <summary>Number of <see cref="Stop"/> calls.</summary>
+    public int StopCount { get; private set; }
+
+    public void Start()
+    {
+        IsRunning = true;
+        StartCount++;
+    }
+
+    public void Stop()
+    {
+        IsRunning = false;
+        StopCount++;
+    }
 
     /// <summary>Simulate one raw advertisement arriving from the OS.</summary>
     public void Emit(BleAdvertisement advertisement)

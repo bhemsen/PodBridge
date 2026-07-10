@@ -40,6 +40,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IBleScanner, WinRtBleScanner>();
         services.AddSingleton<IMediaController, WindowsMediaController>();
 
+        // Phase-8 hardening (issue #55): the Bluetooth-radio power-state source that lets
+        // BleScannerSupervisor restart the driver-free watcher cleanly on a radio toggle.
+        // A singleton owning a live Radio.StateChanged subscription for the app's lifetime
+        // (disposed by the container on shutdown); it degrades to "assume on" if radio
+        // enumeration faults, so Tier-1 scanning never regresses.
+        services.AddSingleton<IBluetoothRadioSource, WinRtBluetoothRadioSource>();
+
         // The audio-state reader holds no subscription or handle between calls — it
         // creates and releases short-lived Core Audio COM objects per Read() — so it
         // needs no shared lifetime and is registered transient (no IDisposable).

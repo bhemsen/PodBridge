@@ -44,11 +44,22 @@
    advertisement stale) the tray shows "unknown / out of range" and no play/pause
    fires — the company id `0x004C` identifies telemetry only and never enters the
    connection path. The composition root wires the pipeline and owns the scanner's
-   start/stop; the tracker does not.
+   start/stop; the tracker does not. **`BleScannerSupervisor` (Core)** owns the
+   watcher's lifecycle relative to the Bluetooth radio: it starts scanning
+   unconditionally (no Tier-1 regression) and, on a radio off→on toggle reported by
+   **`IBluetoothRadioSource`** (`WinRtBluetoothRadioSource`, `Windows.Devices.Radios`),
+   restarts the watcher with a fresh instance (the WinRT watcher does not resume on its
+   own after the radio was off). Parser hardening: `ContinuityParser` +
+   `ModelRegistry` tolerate truncated/over-long/random payloads without throwing or
+   mis-identifying a known model (device-independent fuzz tests).
 2. **Mic-profile policy (Tier 1):** `WindowsAudioSessionMonitor` detects a
    Communications capture session opening → Core's policy engine decides per the
    active mode (HiFi-lock / auto-switch / call-mode) → `WindowsAudioPolicy`
    sets the default vs communications endpoint per role → restores on release.
+   Hardening (Phase 8): the engine snapshots the user's prior endpoint-role routing
+   before its first apply and restores it on graceful shutdown (`MicPolicyEngine.Restore`,
+   called from `App.OnExit`) and automatically rolls back if an endpoint-set fails
+   mid-apply — a failure/crash never leaves audio half-applied or rerouted.
 3. **Codec transparency (Tier 1, read-only):** on connect (and on a manual
    refresh), `WindowsAudioStateReader` (`IAudioStateReader`) reads an `AudioState`
    → Core's `AudioGuidanceEngine` maps it to honest display + advice text → `App`
