@@ -95,9 +95,19 @@
    (Noise Control / Siri, right=`data1`/left=`data2`) which `DriverAapTransport` writes over
    L2CAP, and the echo is parsed by `AapProtocol.TryParsePressAndHoldGestureNotification`
    (issue #47, unit-tested via a fake transport). Because Apple firmware overwrites the
-   config on reconnect, the stored `GestureConfiguration` is re-pushed on the transport's
-   (re)connect / handshake-complete event; that event, the re-push policy, and the settings
-   UI are the remaining Phase-7 issues.
+   config on reconnect, issue #48 adds a Tier-2 **(re)connect signal to the Core
+   `IAapTransport` interface** — `event EventHandler? Connected`, raised by
+   `DriverAapTransport` each time `ConnectAsync` opens a fresh channel (not on the
+   idempotent already-open return), and firable by a fake transport in tests; no change
+   to the write path or handshake logic. The Core `GestureRepushController` subscribes to
+   that signal and, on every (re)connect, reloads the persisted `GestureConfiguration` from
+   the Core `IGestureConfigStore` abstraction (Windows adapter `GestureConfigStore`, a
+   per-user file under `%LOCALAPPDATA%\PodBridge`) and re-writes it, confirming with the
+   Phase-6 write+echo pattern and a **single** retry — a missing echo is a non-fatal
+   "couldn't apply" (no retry storm). It is resolved on the background host so the
+   subscription is live; with the driver absent the transport reports `IsAvailable == false`
+   and nothing is sent (graceful degradation). The gesture **settings UI** is the remaining
+   Phase-7 issue.
 5. **Connection detection (Tier 1, driver-free):** `WinRtConnectionMonitor`
    watches paired Bluetooth-Classic association endpoints and holds a
    `BluetoothDevice` per matched AirPods (name heuristic) for its

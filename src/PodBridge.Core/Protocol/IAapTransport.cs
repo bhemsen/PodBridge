@@ -47,4 +47,22 @@ public interface IAapTransport
     /// the transport does not interpret them.
     /// </summary>
     event EventHandler<ReadOnlyMemory<byte>>? PacketReceived;
+
+    /// <summary>
+    /// Raised each time the Tier-2 L2CAP channel is (re)connected — i.e. every time
+    /// <see cref="ConnectAsync"/> opens a fresh channel (not on the idempotent
+    /// already-open return). It is the OS-free signal the gesture re-push policy
+    /// subscribes to: Apple firmware forgets a third-party host's control-command
+    /// config across a disconnect, so the stored configuration must be re-sent on every
+    /// (re)connect (docs/research/gesture-aap.md "reconnect-overwrite"). It lives on this
+    /// abstraction — not the concrete <c>DriverAapTransport</c> — so Core stays OS-free
+    /// and a fake transport can fire it device-independently in tests.
+    /// <para>
+    /// Handlers must not assume the AAP session handshake has completed when this fires;
+    /// it marks the transport-level (re)connect. A consumer that needs the handshake
+    /// (e.g. the gesture re-push) relies on the write+echo-confirm-with-retry pattern to
+    /// absorb a frame that races the once-per-connection handshake.
+    /// </para>
+    /// </summary>
+    event EventHandler? Connected;
 }

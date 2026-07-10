@@ -69,6 +69,46 @@ public sealed class DriverAapTransportTests
     }
 
     [Fact]
+    public async Task ConnectAsync_raises_Connected_once_on_a_fresh_connect()
+    {
+        var interop = new FakeAapDriverInterop();
+        using var transport = new DriverAapTransport(interop);
+        var count = 0;
+        transport.Connected += (_, _) => count++;
+
+        await transport.ConnectAsync();
+
+        Assert.Equal(1, count); // the (re)connect signal the gesture re-push subscribes to
+    }
+
+    [Fact]
+    public async Task ConnectAsync_does_not_raise_Connected_on_the_idempotent_reconnect()
+    {
+        var interop = new FakeAapDriverInterop();
+        using var transport = new DriverAapTransport(interop);
+        var count = 0;
+        transport.Connected += (_, _) => count++;
+
+        await transport.ConnectAsync();
+        await transport.ConnectAsync(); // already open -> no fresh (re)connect
+
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task ConnectAsync_does_not_raise_Connected_when_the_driver_is_absent()
+    {
+        var interop = new FakeAapDriverInterop { InterfacePath = null };
+        using var transport = new DriverAapTransport(interop);
+        var count = 0;
+        transport.Connected += (_, _) => count++;
+
+        await transport.ConnectAsync();
+
+        Assert.Equal(0, count); // graceful no-op: nothing opened, nothing signalled
+    }
+
+    [Fact]
     public async Task SendAsync_writes_the_frame_bytes_to_the_channel()
     {
         var interop = new FakeAapDriverInterop();

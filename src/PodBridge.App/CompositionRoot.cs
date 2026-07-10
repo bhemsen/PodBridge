@@ -53,5 +53,16 @@ public static class CompositionRoot
         // apply; with the driver absent it reports IsAvailable == false and sends nothing
         // (constitution: graceful degradation).
         services.AddSingleton(sp => new NoiseControlController(sp.GetRequiredService<IAapTransport>()));
+
+        // Phase 7 gesture-config re-push policy (issue #48). A singleton that subscribes to
+        // the IAapTransport (re)connect signal in its constructor and re-pushes the persisted
+        // GestureConfiguration on every Tier-2 (re)connect (Apple firmware forgets it on
+        // disconnect). Built via a factory so the transport + IGestureConfigStore are bound
+        // explicitly and the confirm-timeout / clock defaults apply; with the driver absent
+        // the transport reports IsAvailable == false and it sends nothing (graceful
+        // degradation). The container disposes it (IDisposable) on shutdown, unsubscribing it.
+        services.AddSingleton(sp => new GestureRepushController(
+            sp.GetRequiredService<IAapTransport>(),
+            sp.GetRequiredService<IGestureConfigStore>()));
     }
 }

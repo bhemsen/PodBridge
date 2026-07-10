@@ -22,6 +22,9 @@ internal sealed class FakeAapTransport : IAapTransport
 
     public event EventHandler<ReadOnlyMemory<byte>>? PacketReceived;
 
+    /// <summary>The OS-free (re)connect signal the gesture re-push policy subscribes to.</summary>
+    public event EventHandler? ConnectedSignal;
+
     public Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         Connected = true;
@@ -33,6 +36,18 @@ internal sealed class FakeAapTransport : IAapTransport
         Connected = false;
         return Task.CompletedTask;
     }
+
+    // Explicit interface implementation: the IAapTransport (re)connect event is surfaced
+    // via ConnectedSignal + RaiseConnected so tests can fire it device-independently without
+    // colliding with the existing bool Connected flag the noise-control tests assert on.
+    event EventHandler? IAapTransport.Connected
+    {
+        add => ConnectedSignal += value;
+        remove => ConnectedSignal -= value;
+    }
+
+    /// <summary>Simulate a Tier-2 (re)connect: fire the IAapTransport.Connected event.</summary>
+    public void RaiseConnected() => ConnectedSignal?.Invoke(this, EventArgs.Empty);
 
     public Task SendAsync(ReadOnlyMemory<byte> packet, CancellationToken cancellationToken = default)
     {

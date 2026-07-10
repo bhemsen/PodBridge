@@ -77,6 +77,14 @@ public static class ServiceCollectionExtensions
         // component that talks to the driver.
         services.AddSingleton<IAapTransport, DriverAapTransport>();
 
+        // Phase 7 gesture-config persistence (issue #48). The store is a small per-user
+        // file under %LOCALAPPDATA%\PodBridge (local-only, no network); it holds no handle
+        // between calls, so it is registered as a singleton only because its sole consumer
+        // (the singleton GestureRepushController) reloads it on every Tier-2 (re)connect.
+        // Core stays OS-free — it depends on the IGestureConfigStore abstraction, this is
+        // the Windows file-backed adapter.
+        services.AddSingleton<IGestureConfigStore, GestureConfigStore>();
+
         // Phase 6 advanced-tier opt-in install step (issue #45). Stateless — it holds no
         // handle between calls (it locates the separate install script and launches it
         // elevated on an explicit user action) — so it is transient, like the other
