@@ -50,15 +50,14 @@
    — the AACP top-level opcode table (GPL-3.0; facts only). Opcode `0x001D` is
    listed as "Device Information", destination "Host" (accessory → host).
 2. [librepods `docs/device-info.md`](https://github.com/librepods-org/librepods/blob/main/docs/device-info.md)
-   — states plainly that the `0x001D` packet "can not be requested from the
-   accessory; it is only sent by the accessory to the host upon connection",
-   and enumerates its fields: name, model number, manufacturer, serial number,
-   two version fields, hardware revision, updater-app version, per-bud
-   serials.
+   — documents that the `0x001D` packet cannot be solicited by the host: the
+   accessory emits it on its own once the connection is established. Its
+   enumerated fields are name, model number, manufacturer, serial number, two
+   version fields, hardware revision, updater-app version, and per-bud serials.
 3. [librepods `docs/control_commands.md`](https://github.com/librepods-org/librepods/blob/main/docs/control_commands.md)
    — the full `0x0009` control-command identifier table (`0x01`-`0x41`),
-   explicitly noted as "extracted from the iOS 19.1 Beta (23B5044l)'s
-   bluetooth stack". Contains no "get/read firmware version" identifier —
+   noted as reverse-engineered from the iOS 19.1 Beta (build 23B5044l)
+   Bluetooth stack. It contains no get/read-firmware-version identifier —
    corroborates that no host-initiated request exists. Also documents `0x1A`
    ListeningModeConfigs (bitmask: Off `0x01`/ANC `0x02`/Transparency `0x04`/
    Adaptive `0x08`), `0x16` ClickHoldMode (gesture remap, per-bud), and `0x30`
@@ -68,16 +67,16 @@
    as an **active** `ControlCommand`/`FirmwareVersion` request-response call.
    Contradicts sources 1-3; `docs/prior-art.md` already flags this project's
    AAP/driver path as unverified against real hardware.
-5. [librepods issue #612](https://github.com/kavishdevar/librepods/issues/612)
+5. [librepods issue #612](https://github.com/librepods-org/librepods/issues/612)
    — community feature request ("Research: AirPods Firmware Updates via
    Android (UARP)") whose own Phase 1 is "Detect current AirPods firmware
    version" — independent confirmation that even the most mature open AAP
    client does not yet have a working firmware-version read; it is an open
    research problem there too, not a solved one.
-6. [librepods issue #288](https://github.com/kavishdevar/librepods/issues/288)
+6. [librepods issue #288](https://github.com/librepods-org/librepods/issues/288)
    — an unrelated bug report whose logs show the Linux/Rust client expecting
    an unsolicited `AirPodsInformation` packet immediately after L2CAP connect
-   ("Expected AirPodsInformation … got something else") — independent
+   and logging a mismatch when a different packet arrives instead — independent
    behavioural confirmation that device/firmware info arrives as a one-time
    push on connect, not on request.
 7. Apple Support — [Active Noise Cancellation and Transparency modes for
