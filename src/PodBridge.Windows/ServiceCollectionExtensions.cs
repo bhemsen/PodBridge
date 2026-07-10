@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Media;
+using PodBridge.Core.Protocol;
 using PodBridge.Core.Startup;
 
 namespace PodBridge.Windows;
@@ -65,6 +66,15 @@ public static class ServiceCollectionExtensions
         // between calls (like the audio-state reader) — so it is transient. The About
         // surface resolves it on demand to read and set the default-OFF option.
         services.AddTransient<IStartupToggle, StartupTaskToggle>();
+
+        // Phase 6 Tier-2 (advanced, opt-in) AAP transport over the optional KMDF driver
+        // (issue #43). Registered unconditionally and safely: with the driver absent — the
+        // Tier-1 default — it probes at construction, reports IsAvailable == false, and does
+        // nothing, so Tier-1 is unaffected (constitution: graceful degradation). A singleton
+        // because it owns a live device handle + background receive loop for the app's
+        // lifetime; the container disposes it (IDisposable) on shutdown. It is the ONLY
+        // component that talks to the driver.
+        services.AddSingleton<IAapTransport, DriverAapTransport>();
         return services;
     }
 }
