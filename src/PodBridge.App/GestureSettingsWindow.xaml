@@ -1,0 +1,83 @@
+<Window x:Class="PodBridge.App.GestureSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Gesture controls"
+        Width="480" Height="440"
+        MinWidth="420" MinHeight="380"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True"
+        ResizeMode="CanResize">
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- Header: honest scope — only press-and-hold is remappable; the other presses
+         are fixed by Apple. -->
+    <StackPanel Grid.Row="0" Margin="0,0,0,14">
+      <TextBlock Text="Press-and-hold gesture" FontSize="20" FontWeight="SemiBold" />
+      <TextBlock TextWrapping="Wrap" Opacity="0.8" Margin="0,6,0,0"
+                 Text="AirPods let you reassign only the press-and-hold gesture. The single, double, and triple presses (play/pause, next, previous) are fixed by Apple and cannot be changed." />
+    </StackPanel>
+
+    <!-- Exactly one of the three state panels below is visible at a time; the
+         code-behind picks it from the Core availability decision. -->
+    <Grid Grid.Row="1">
+
+      <!-- Available: per-bud action pickers + Apply + outcome + persistence note. -->
+      <StackPanel x:Name="AvailablePanel" Visibility="Collapsed">
+        <TextBlock Text="When you press and hold the stem, do:" Margin="0,0,0,10" />
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="Left AirPod" VerticalAlignment="Center"
+                     Margin="0,0,12,8" MinWidth="80" />
+          <ComboBox x:Name="LeftActionCombo" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
+                    DisplayMemberPath="Label" SelectedValuePath="Action" />
+          <TextBlock Grid.Row="1" Grid.Column="0" Text="Right AirPod" VerticalAlignment="Center"
+                     Margin="0,0,12,8" MinWidth="80" />
+          <ComboBox x:Name="RightActionCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
+                    DisplayMemberPath="Label" SelectedValuePath="Action" />
+        </Grid>
+
+        <Button x:Name="ApplyButton" Content="Apply" HorizontalAlignment="Left"
+                MinWidth="88" Padding="12,4" Margin="0,8,0,0" Click="OnApply" />
+
+        <TextBlock x:Name="StatusText" TextWrapping="Wrap" Margin="0,10,0,0"
+                   Opacity="0.9" Visibility="Collapsed" />
+
+        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.7" Margin="0,14,0,0"
+                   Text="Your choice is saved and re-applied automatically each time your AirPods reconnect — AirPods forget a PC's setting otherwise." />
+      </StackPanel>
+
+      <!-- Driver absent (Tier-1 default): reuse the Phase-6 honest notice + the opt-in
+           advanced-tier affordance. No new signed-driver claim is made here. -->
+      <StackPanel x:Name="DriverUnavailablePanel" Visibility="Collapsed">
+        <TextBlock x:Name="UnavailableText" TextWrapping="Wrap" Margin="0,0,0,4" />
+        <TextBlock TextWrapping="Wrap" Opacity="0.8" Margin="0,0,0,12"
+                   Text="Gesture remap needs the optional advanced-tier driver. Every default (Tier-1) feature keeps working without it." />
+        <Button Content="Enable advanced tier…" HorizontalAlignment="Left"
+                MinWidth="88" Padding="12,4" Click="OnEnableAdvancedTier" />
+      </StackPanel>
+
+      <!-- Driver present but the connected model is out of the supported scope. -->
+      <StackPanel x:Name="ModelUnsupportedPanel" Visibility="Collapsed">
+        <TextBlock TextWrapping="Wrap"
+                   Text="Connect supported AirPods (AirPods Pro 2) to change the press-and-hold gesture. Support for more models is planned." />
+      </StackPanel>
+    </Grid>
+
+    <!-- Close. -->
+    <Button Grid.Row="2" Content="Close" IsCancel="True" IsDefault="True"
+            HorizontalAlignment="Right" MinWidth="88" Padding="12,4"
+            Margin="0,12,0,0" Click="OnClose" />
+  </Grid>
+</Window>

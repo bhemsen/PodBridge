@@ -64,5 +64,19 @@ public static class CompositionRoot
         services.AddSingleton(sp => new GestureRepushController(
             sp.GetRequiredService<IAapTransport>(),
             sp.GetRequiredService<IGestureConfigStore>()));
+
+        // Phase 7 gesture-remap settings surface (issue #49). The Core decision + apply logic
+        // behind the gesture settings window: it resolves availability (driver present +
+        // supported model), exposes the honest action set, persists the user's assignment via
+        // IGestureConfigStore, and writes it by delegating to the GestureRepushController above
+        // (one shared write+echo-confirm path for the immediate apply and the reconnect
+        // re-push). A singleton bound via a factory so the transport + store + re-push policy
+        // are wired explicitly; App feature code depends only on these Core abstractions and
+        // never on the concrete driver adapter. With the driver absent it reports
+        // DriverUnavailable and writes nothing (graceful degradation).
+        services.AddSingleton(sp => new GestureSettingsController(
+            sp.GetRequiredService<IAapTransport>(),
+            sp.GetRequiredService<IGestureConfigStore>(),
+            sp.GetRequiredService<GestureRepushController>()));
     }
 }
