@@ -1,0 +1,76 @@
+;
+; PodBridgeAAP.inf -- optional Tier-2 KMDF L2CAP bridge for AAP (PSM 0x1001).
+;
+; Client-side Bluetooth profile driver: BthEnum enumerates a PDO for the custom
+; PodBridge AAP service GUID advertised by the paired AirPods, and this driver
+; binds to it (research #40 (c)). Installed only on explicit, elevated user
+; opt-in via `pnputil /add-driver PodBridgeAAP.inf /install` -- never bundled in
+; the app MSIX, never installed silently (constitution: opt-in invasiveness).
+;
+; Spec: docs/specs/spec-advanced-driver-anc.md
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = Bluetooth
+ClassGuid   = {e0cbf06c-cd8b-4647-bb8a-263b43f0f974}
+Provider    = %ManufacturerName%
+CatalogFile = PodBridgeAAP.cat
+DriverVer   = 07/09/2026,1.0.0.0
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13 ; driver store (package-relative)
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+PodBridgeAAP.sys = 1,,
+
+[Manufacturer]
+%ManufacturerName% = Standard,NTamd64
+
+; Bind to the BthEnum hardware id for the PodBridge AAP service GUID
+; (GUID_PODBRIDGE_AAP_SERVICE in Public.h). Form: BTHENUM\{ServiceGUID}.
+[Standard.NTamd64]
+%DeviceDesc% = PodBridgeAAP_Device, BTHENUM\{36f88597-6bae-4e3d-a454-66c3d877f4ea}
+
+[PodBridgeAAP_Device.NT]
+CopyFiles = PodBridgeAAP_CopyFiles
+
+[PodBridgeAAP_CopyFiles]
+PodBridgeAAP.sys
+
+[PodBridgeAAP_Device.NT.Services]
+AddService = PodBridgeAAP, 0x00000002, PodBridgeAAP_Service ; SPSVCINST_ASSOCSERVICE
+
+[PodBridgeAAP_Service]
+DisplayName   = %ServiceDesc%
+ServiceType   = 1 ; SERVICE_KERNEL_DRIVER
+StartType     = 3 ; SERVICE_DEMAND_START
+ErrorControl  = 1 ; SERVICE_ERROR_NORMAL
+ServiceBinary = %13%\PodBridgeAAP.sys
+
+; Let a normal (non-elevated, asInvoker) user session open the device interface:
+; elevation is only for install, not for runtime I/O (research #40 (b)). SDDL
+; grants the driver/system/admins full access and Everyone read+write.
+[PodBridgeAAP_Device.NT.HW]
+AddReg = PodBridgeAAP_AddReg
+
+[PodBridgeAAP_AddReg]
+HKR,,DeviceCharacteristics,0x10001,0x0100 ; FILE_DEVICE_SECURE_OPEN
+HKR,,Security,,"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;WD)"
+
+; KMDF, coinstaller-free.
+[PodBridgeAAP_Device.NT.Wdf]
+KmdfService = PodBridgeAAP, PodBridgeAAP_wdfsect
+
+[PodBridgeAAP_wdfsect]
+KmdfLibraryVersion = 1.33
+
+[Strings]
+ManufacturerName = "PodBridge"
+DiskName         = "PodBridge AAP Installation Disk"
+DeviceDesc       = "PodBridge AAP L2CAP Bridge"
+ServiceDesc      = "PodBridge AAP L2CAP Bridge Service"

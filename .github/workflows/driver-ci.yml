@@ -1,0 +1,58 @@
+name: Driver CI
+
+# Compile-only regression gate for the optional Tier-2 KMDF L2CAP bridge
+# (driver/PodBridgeAAP). Builds the driver headlessly on windows-latest using the
+# WDK delivered as NuGet packages (research #40 (e)). It is intentionally
+# NON-BLOCKING: a driver compile break must never gate the .NET Verify or a
+# merge. Functional behaviour (loading, real AirPods) is a manual smoke test --
+# CI cannot sign-to-load or exercise Bluetooth (constitution Tier-2 gate).
+# Spec: docs/specs/spec-advanced-driver-anc.md
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'driver/**'
+      - '.github/workflows/driver-ci.yml'
+  pull_request:
+    paths:
+      - 'driver/**'
+      - '.github/workflows/driver-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  driver-compile:
+    name: KMDF driver compile-only (x64)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate MSBuild
+        id: findmsbuild
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+          if (-not $msbuild) { throw 'MSBuild.exe not found on the runner.' }
+          Write-Host "MSBuild: $msbuild"
+          "msbuild=$msbuild" >> $env:GITHUB_OUTPUT
+
+      - name: Restore (NuGet WDK)
+        shell: pwsh
+        run: |
+          & '${{ steps.findmsbuild.outputs.msbuild }}' driver/PodBridgeAAP/PodBridgeAAP.vcxproj `
+            /t:restore /p:Configuration=Release /p:Platform=x64
+
+      - name: Build driver (compile-only, no signing)
+        shell: pwsh
+        run: |
+          & '${{ steps.findmsbuild.outputs.msbuild }}' driver/PodBridgeAAP/PodBridgeAAP.vcxproj `
+            /p:Configuration=Release /p:Platform=x64 /v:minimal /nologo
+
+      - name: Confirm .sys produced
+        shell: pwsh
+        run: |
+          $sys = 'driver/PodBridgeAAP/x64/Release/PodBridgeAAP.sys'
+          if (-not (Test-Path $sys)) { throw "Driver binary not found: $sys" }
+          Write-Host "Built: $sys"
