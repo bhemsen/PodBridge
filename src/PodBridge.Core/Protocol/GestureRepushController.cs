@@ -124,6 +124,17 @@ public sealed class GestureRepushController : IDisposable
             var winner = await Task.WhenAny(confirmed.Task, timeout).ConfigureAwait(false);
             return winner == confirmed.Task;
         }
+        catch (Exception ex)
+            when (ex is InvalidOperationException or ObjectDisposedException or IOException)
+        {
+            // The Tier-2 channel isn't open (a connect that raced this write, or a dropped
+            // session) or the driver's I/O failed. Treat it as a non-fatal miss so this write
+            // path honours the documented never-throws invariant instead of escaping onto the
+            // WPF dispatcher and crashing the tray: the choice is already persisted and gets
+            // re-pushed on the next (re)connect (docs/research/gesture-aap.md
+            // "reconnect-overwrite"; spec docs/specs/spec-gesture-remap.md write-confirm rule).
+            return false;
+        }
         finally
         {
             _transport.PacketReceived -= OnPacket;
