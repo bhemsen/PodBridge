@@ -6,6 +6,7 @@ using PodBridge.Core.Diagnostics;
 using PodBridge.Core.Media;
 using PodBridge.Core.Protocol;
 using PodBridge.Core.Startup;
+using PodBridge.Windows.Logging;
 
 namespace PodBridge.Windows;
 
@@ -105,6 +106,13 @@ public static class ServiceCollectionExtensions
         // export) — so it is transient, like the other per-call adapters. It touches only
         // the local filesystem (constitution: local-only, no network sink).
         services.AddTransient<IDiagnosticsExporter, DiagnosticsExporter>();
+
+        // Phase 8 structured local logging (issue #54). The rolling, size/age-capped local
+        // file sink (~10 MB / 7 days) is a Windows filesystem adapter. Registered as a
+        // singleton so the composition root can add the SAME instance as the ONLY
+        // ILoggerProvider AND the tray "Debug logging" toggle can flip its MinLevel at
+        // runtime — one instance, local file only, no network sink (constitution: local-only).
+        services.AddSingleton<RollingFileLoggerProvider>();
         return services;
     }
 }
