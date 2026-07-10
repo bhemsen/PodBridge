@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PodBridge.Core.AdvancedTier;
 using PodBridge.Core.Audio;
 using PodBridge.Core.Bluetooth;
+using PodBridge.Core.Diagnostics;
 using PodBridge.Core.Media;
 using PodBridge.Core.Protocol;
 using PodBridge.Core.Startup;
@@ -91,6 +92,12 @@ public static class ServiceCollectionExtensions
         // per-call adapters. It NEVER elevates the app (asInvoker) and NEVER runs bcdedit;
         // it is invoked only from the App's explicit "Enable advanced tier" affordance.
         services.AddTransient<IAdvancedTierInstaller, AdvancedTierInstaller>();
+
+        // Phase 8 local diagnostics export (issue #54). Stateless — it holds no handle
+        // between calls (it renders the snapshot and writes one timestamped file per
+        // export) — so it is transient, like the other per-call adapters. It touches only
+        // the local filesystem (constitution: local-only, no network sink).
+        services.AddTransient<IDiagnosticsExporter, DiagnosticsExporter>();
         return services;
     }
 }
