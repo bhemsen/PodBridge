@@ -145,6 +145,14 @@ public partial class App : Application
             _trayIcon!, controller, stateProvider, Dispatcher);
         _trayNoiseControlController.Start();
 
+        // Phase-7 gesture-config re-push (issue #48). Resolve the singleton so it is
+        // constructed and its subscription to the transport's (re)connect signal is live:
+        // it then re-pushes the persisted GestureConfiguration on every Tier-2 (re)connect,
+        // because Apple firmware forgets it on disconnect. No tray surface here (the settings
+        // UI is a separate Phase-7 issue); with the driver absent it sends nothing. The
+        // container owns and disposes it (unsubscribing) on shutdown.
+        _ = services.GetRequiredService<GestureRepushController>();
+
         // The driver-absent "Enable advanced tier…" affordance: show the honest security
         // warning, then — only on explicit confirmation — launch the SEPARATE, ELEVATED
         // install step. The app stays asInvoker; it never auto-elevates or installs silently.

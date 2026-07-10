@@ -48,18 +48,22 @@ public sealed class DriverAapTransport : IAapTransport, IDisposable
     public event EventHandler<ReadOnlyMemory<byte>>? PacketReceived;
 
     /// <inheritdoc />
+    public event EventHandler? Connected;
+
+    /// <inheritdoc />
     public bool IsAvailable => _available;
 
     /// <inheritdoc />
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        var channelOpened = false;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (_channel is not null)
             {
-                return; // idempotent: already open
+                return; // idempotent: already open — not a fresh (re)connect
             }
 
             if (!_interop.TryFindInterfacePath(out var path) || path is null)
@@ -80,10 +84,20 @@ public sealed class DriverAapTransport : IAapTransport, IDisposable
             var loopToken = _receiveCts.Token; // capture: the loop must not read the field
             _receiveLoop = Task.Run(() => ReceiveLoop(channel, loopToken), CancellationToken.None);
             _channel = channel;
+            channelOpened = true;
         }
         finally
         {
             _gate.Release();
+        }
+
+        // Raise the Tier-2 (re)connect signal only after a fresh channel is open and the
+        // gate is released — never on the idempotent already-open return — so the gesture
+        // re-push policy re-applies the config Apple forgot on disconnect. Raised outside
+        // the gate so a handler that writes a frame cannot re-enter under the lock.
+        if (channelOpened)
+        {
+            Connected?.Invoke(this, EventArgs.Empty);
         }
     }
 
