@@ -17,7 +17,7 @@
 | 4 | Microphone-profile policy — HiFi-lock / auto-switch / call-mode via IPolicyConfig + audio-session monitor | [spec](docs/specs/archive/spec-mic-profile-policy.md) | [#4](https://github.com/bhemsen/PodBridge/milestone/4) |
 | 5 | Packaging & distribution — MSIX + winget installer, disclaimer, docs, Apache-2.0, first driver-free release (MVP) | [spec](docs/specs/spec-packaging-distribution.md) | [#5](https://github.com/bhemsen/PodBridge/milestone/5) |
 | 6 | Advanced tier: KMDF L2CAP driver + AAP writes — optional driver, ANC/Transparency/Adaptive switching, signing/test-mode UX | [spec](docs/specs/archive/spec-advanced-driver-anc.md) | [#6](https://github.com/bhemsen/PodBridge/milestone/6) |
-| 7 | Gesture remap — stem/press configuration via AAP, re-push on reconnect | [spec](docs/specs/spec-gesture-remap.md) | [#7](https://github.com/bhemsen/PodBridge/milestone/7) |
+| 7 | Gesture remap — stem/press configuration via AAP, re-push on reconnect | [spec](docs/specs/archive/spec-gesture-remap.md) | [#7](https://github.com/bhemsen/PodBridge/milestone/7) |
 | 8 | Model & firmware coverage / hardening — broaden supported models, handle firmware fragility, diagnostics | [spec](docs/specs/spec-model-coverage-hardening.md) | [#8](https://github.com/bhemsen/PodBridge/milestone/8) |
 
 Phases 1–5 are the **driver-free MVP** (the bulk of the value, low risk).
