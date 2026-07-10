@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using PodBridge.Windows;
 using PodBridge.Windows.Tests.Interop;
 using Xunit;
@@ -120,6 +121,24 @@ public sealed class DriverAapTransportTests
 
         var sent = Assert.Single(interop.LastChannel!.Sent);
         Assert.Equal(frame, sent);
+    }
+
+    [Fact]
+    public async Task SendAsync_maps_a_driver_Win32Exception_to_IOException()
+    {
+        var interop = new FakeAapDriverInterop();
+        using var transport = new DriverAapTransport(interop);
+        await transport.ConnectAsync();
+        // The real Win32AapDriverChannel throws Win32Exception on a failed send IOCTL (e.g.
+        // the L2CAP session dropped mid-write). Core's gesture re-push write path only
+        // tolerates IOException, so the adapter must translate at this OS boundary or the
+        // Win32Exception escapes onto the WPF dispatcher and crashes the tray.
+        interop.LastChannel!.SendFault = new Win32Exception(1167); // ERROR_DEVICE_NOT_CONNECTED
+
+        var ex = await Assert.ThrowsAsync<IOException>(
+            () => transport.SendAsync(new byte[] { 0x01 }));
+
+        Assert.IsType<Win32Exception>(ex.InnerException);
     }
 
     [Fact]

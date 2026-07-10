@@ -33,7 +33,9 @@ namespace PodBridge.App;
 /// absent the modes are disabled and an honest explanation plus an "Enable advanced
 /// tier…" affordance (wired via <see cref="SetEnableAdvancedTierHandler"/> to the honest
 /// warning + explicit elevated install step; falls back to the docs) are shown instead —
-/// never silently broken. An
+/// never silently broken. A "Gesture controls…" entry opens the Tier-2 gesture-remap
+/// settings window via the handler wired with <see cref="SetGestureSettingsHandler"/>
+/// (the window surfaces the driver-absent / unsupported-model states honestly). An
 /// "About PodBridge" entry opens the About window via
 /// the handler wired with <see cref="SetAboutHandler"/>. The tooltip stays concise
 /// (status + battery only); the audio surface lives in the menu. First-run pairing
@@ -72,6 +74,7 @@ public sealed class TrayIcon : IDisposable
     private Action? _callModeToggleHandler;
     private Action<NoiseControlMode>? _noiseControlModeHandler;
     private Action? _enableAdvancedTierHandler;
+    private Action? _gestureSettingsHandler;
     private Action? _aboutHandler;
 
     private TrayIcon()
@@ -158,6 +161,13 @@ public sealed class TrayIcon : IDisposable
     /// About window). Call on the UI thread.
     /// </summary>
     public void SetAboutHandler(Action handler) => _aboutHandler = handler;
+
+    /// <summary>
+    /// Wires the callback invoked by the "Gesture controls…" menu action (opens the Tier-2
+    /// gesture-remap settings window). The window itself surfaces the driver-absent /
+    /// unsupported-model states honestly, so the entry is always shown. Call on the UI thread.
+    /// </summary>
+    public void SetGestureSettingsHandler(Action handler) => _gestureSettingsHandler = handler;
 
     /// <summary>
     /// Wires the mic-policy submenu actions: <paramref name="onModeSelected"/> fires
@@ -284,6 +294,7 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(CreateItem("Pair / Reconnect", OnOpenBluetoothSettings));
         menu.Items.Add(CreateItem("Open Bluetooth settings", OnOpenBluetoothSettings));
         menu.Items.Add(new Separator());
+        menu.Items.Add(CreateItem("Gesture controls…", OnGestureSettings));
         menu.Items.Add(CreateItem("About PodBridge", OnAbout));
         menu.Items.Add(CreateItem("Exit", OnExit));
         return menu;
@@ -369,6 +380,9 @@ public sealed class TrayIcon : IDisposable
 
     private void OnRefreshAudio(object sender, RoutedEventArgs e)
         => _refreshAudioHandler?.Invoke();
+
+    private void OnGestureSettings(object sender, RoutedEventArgs e)
+        => _gestureSettingsHandler?.Invoke();
 
     private void OnAbout(object sender, RoutedEventArgs e)
         => _aboutHandler?.Invoke();

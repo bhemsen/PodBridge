@@ -49,6 +49,12 @@ internal sealed class FakeAapDriverChannel : IAapDriverChannel
 
     public bool Disposed { get; private set; }
 
+    /// <summary>
+    /// When set, <see cref="Send"/> throws this instead of recording the frame — models a
+    /// failed send IOCTL (the real channel throws <see cref="System.ComponentModel.Win32Exception"/>).
+    /// </summary>
+    public Exception? SendFault { get; set; }
+
     /// <summary>Frames written via <see cref="Send"/>, in order.</summary>
     public IReadOnlyList<byte[]> Sent
     {
@@ -59,6 +65,11 @@ internal sealed class FakeAapDriverChannel : IAapDriverChannel
 
     public void Send(ReadOnlyMemory<byte> frame)
     {
+        if (SendFault is not null)
+        {
+            throw SendFault;
+        }
+
         lock (_sent)
         {
             _sent.Add(frame.ToArray());

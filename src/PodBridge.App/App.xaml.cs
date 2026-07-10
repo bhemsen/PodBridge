@@ -26,6 +26,7 @@ public partial class App : Application
     private IHost? _host;
     private TrayIcon? _trayIcon;
     private AboutWindow? _aboutWindow;
+    private GestureSettingsWindow? _gestureSettingsWindow;
     private TrayStatusController? _trayStatusController;
     private TrayBatteryController? _trayBatteryController;
     private TrayAudioController? _trayAudioController;
@@ -54,6 +55,7 @@ public partial class App : Application
         // tear it down on exit. The "About" entry opens the app's only window.
         _trayIcon = TrayIcon.Create();
         _trayIcon.SetAboutHandler(ShowAboutWindow);
+        _trayIcon.SetGestureSettingsHandler(ShowGestureSettingsWindow);
 
         var monitor = _host.Services.GetRequiredService<IConnectionMonitor>();
 
@@ -148,9 +150,10 @@ public partial class App : Application
         // Phase-7 gesture-config re-push (issue #48). Resolve the singleton so it is
         // constructed and its subscription to the transport's (re)connect signal is live:
         // it then re-pushes the persisted GestureConfiguration on every Tier-2 (re)connect,
-        // because Apple firmware forgets it on disconnect. No tray surface here (the settings
-        // UI is a separate Phase-7 issue); with the driver absent it sends nothing. The
-        // container owns and disposes it (unsubscribing) on shutdown.
+        // because Apple firmware forgets it on disconnect. The user-facing assignment surface
+        // is the "Gesture controls…" window (issue #49), which persists via the same store
+        // and delegates its write to this controller; with the driver absent it sends nothing.
+        // The container owns and disposes it (unsubscribing) on shutdown.
         _ = services.GetRequiredService<GestureRepushController>();
 
         // The driver-absent "Enable advanced tier…" affordance: show the honest security
@@ -208,6 +211,29 @@ public partial class App : Application
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
+    }
+
+    // Opens the Tier-2 gesture-remap settings window from the tray "Gesture controls…"
+    // entry. Binds the Core GestureSettingsController (availability decision + persistence +
+    // write) and the shared IDeviceStateProvider (for the connected model); the driver-absent
+    // panel reuses the same explicit, user-triggered EnableAdvancedTier flow as noise control
+    // (no silent elevation). A single instance is reused, mirroring the About window; closing
+    // it never exits the tray-resident app (ShutdownMode is OnExplicitShutdown).
+    private void ShowGestureSettingsWindow()
+    {
+        if (_gestureSettingsWindow is not null)
+        {
+            _gestureSettingsWindow.Activate();
+            return;
+        }
+
+        var services = _host!.Services;
+        _gestureSettingsWindow = new GestureSettingsWindow(
+            services.GetRequiredService<GestureSettingsController>(),
+            services.GetRequiredService<IDeviceStateProvider>(),
+            EnableAdvancedTier);
+        _gestureSettingsWindow.Closed += (_, _) => _gestureSettingsWindow = null;
+        _gestureSettingsWindow.Show();
     }
 
     // Opens the About window (the app's first non-tray window) from the tray "About"
@@ -274,6 +300,11 @@ public partial class App : Application
         // process alive after an explicit shutdown.
         _aboutWindow?.Close();
         _aboutWindow = null;
+
+        // Close the gesture-settings window too (it unsubscribes from device-state changes
+        // on close), so no open window keeps the process alive after an explicit shutdown.
+        _gestureSettingsWindow?.Close();
+        _gestureSettingsWindow = null;
 
         _trayIcon?.Dispose();
         _trayIcon = null;

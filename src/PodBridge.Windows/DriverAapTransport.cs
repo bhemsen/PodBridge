@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using PodBridge.Core.Protocol;
 using PodBridge.Windows.Interop;
 
@@ -126,7 +127,19 @@ public sealed class DriverAapTransport : IAapTransport, IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         var channel = _channel
             ?? throw new InvalidOperationException("Call ConnectAsync before SendAsync.");
-        await Task.Run(() => channel.Send(packet), cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await Task.Run(() => channel.Send(packet), cancellationToken).ConfigureAwait(false);
+        }
+        catch (Win32Exception ex)
+        {
+            // A failed send IOCTL (e.g. the L2CAP session dropped mid-write) surfaces from
+            // the driver as a Win32Exception. Translate it to IOException at this OS boundary
+            // so OS-free Core sees a platform-neutral I/O failure it already tolerates
+            // (GestureRepushController's never-throws write path) rather than a Win32-specific
+            // type it must not reference. See docs/specs/spec-advanced-driver-anc.md.
+            throw new IOException("AAP driver send failed.", ex);
+        }
     }
 
     /// <summary>Stops the receive loop and closes the channel; safe when nothing is open.</summary>

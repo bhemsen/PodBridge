@@ -93,6 +93,25 @@ public class GestureRepushControllerTests
     }
 
     [Fact]
+    public async Task RepushAsync_TransportThrowsOnSend_CouldNotApply()
+    {
+        // A closed/broken Tier-2 channel makes DriverAapTransport.SendAsync throw (e.g.
+        // "Call ConnectAsync before SendAsync." when the L2CAP channel isn't open). That must
+        // be a non-fatal miss, honouring the documented never-throws invariant — not an escape
+        // that would reach the WPF dispatcher via the awaited Apply handler and crash the tray.
+        var transport = new FakeAapTransport
+        {
+            SendException = new InvalidOperationException("Call ConnectAsync before SendAsync."),
+        };
+        using var controller = new GestureRepushController(
+            transport, new FakeGestureConfigStore(Config), new FakeTimeProvider(), Timeout);
+
+        var outcome = await controller.RepushAsync();
+
+        Assert.Equal(GestureRepushOutcome.CouldNotApply, outcome);
+    }
+
+    [Fact]
     public async Task RepushAsync_RetryConfirms_WhenTheSecondAttemptIsEchoed()
     {
         // The first attempt times out; the retry is echoed and confirms.

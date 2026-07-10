@@ -15,6 +15,13 @@ internal sealed class FakeAapTransport : IAapTransport
 
     public bool IsAvailable { get; set; } = true;
 
+    /// <summary>
+    /// When set, <see cref="SendAsync"/> faults with it instead of recording the frame —
+    /// simulates a closed/broken Tier-2 channel (the real <c>DriverAapTransport</c> throws
+    /// e.g. <see cref="InvalidOperationException"/> "Call ConnectAsync before SendAsync.").
+    /// </summary>
+    public Exception? SendException { get; set; }
+
     /// <summary>Frames written via <see cref="SendAsync"/>, in order.</summary>
     public IReadOnlyList<byte[]> Sent => _sent;
 
@@ -51,6 +58,11 @@ internal sealed class FakeAapTransport : IAapTransport
 
     public Task SendAsync(ReadOnlyMemory<byte> packet, CancellationToken cancellationToken = default)
     {
+        if (SendException is not null)
+        {
+            return Task.FromException(SendException);
+        }
+
         _sent.Add(packet.ToArray());
         return Task.CompletedTask;
     }
