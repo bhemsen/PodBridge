@@ -44,7 +44,11 @@ $projectDir = $PSScriptRoot
 $project = Join-Path $projectDir 'PodBridgeAAP.vcxproj'
 $outDir = Join-Path $projectDir "x64\$Configuration"
 $certName = 'PodBridge Test (AAP Driver)'
-$certFile = Join-Path $projectDir 'PodBridgeTest.cer'
+# Export the PUBLIC test cert INTO the build output ($outDir) so the package folder is
+# self-contained -- INF + .sys + .cat + .cer co-located, which is exactly what
+# install-advanced-tier.ps1's Resolve-PackageDir resolves to and what a downloaded release
+# would extract. (Signing uses the cert in CurrentUser\My by thumbprint, not this file.)
+$certFile = Join-Path $outDir 'PodBridgeTest.cer'
 
 function Find-MSBuild {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'

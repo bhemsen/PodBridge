@@ -112,6 +112,20 @@ function Resolve-PackageDir {
     throw "No driver package ($infName) found. Build it first (.\build-testsign.ps1) or pass -PackageDir. Looked in: $($candidates -join '; ')"
 }
 
+function Resolve-CertPath([string]$packageDir) {
+    # Locate the .cer trust file INDEPENDENTLY of the INF: build-testsign.ps1 now co-locates it
+    # in the package dir, but an older build (or a hand-run) may have left it in the project root
+    # next to this script. Probe both so a fresh package and an already-built tree both resolve.
+    # The .cer carries only the PUBLIC key, so its exact location is not security-sensitive.
+    $candidates = @($packageDir, $PSScriptRoot) | Select-Object -Unique
+    foreach ($c in $candidates) {
+        $cer = Join-Path $c $certFileName
+        if (Test-Path $cer) { return $cer }
+    }
+    $looked = ($candidates | ForEach-Object { Join-Path $_ $certFileName }) -join '; '
+    throw "Test certificate ($certFileName) not found (run build-testsign.ps1). Looked in: $looked"
+}
+
 # Import the test cert into BOTH machine stores (Trusted Root CA + Trusted
 # Publishers). Import-Certificate is the built-in PowerShell equivalent of
 # `CertMgr.exe /add <cer> /s /r localMachine root` and `... trustedpublisher`
@@ -138,9 +152,8 @@ function Remove-TestCertificate {
 function Install-AdvancedTier {
     $dir = Resolve-PackageDir
     $inf = Join-Path $dir $infName
-    $cer = Join-Path $dir $certFileName
     if (-not (Test-Path $inf)) { throw "Driver INF not found: $inf" }
-    if (-not (Test-Path $cer)) { throw "Test certificate not found: $cer (run build-testsign.ps1)" }
+    $cer = Resolve-CertPath $dir
 
     # 1) Trust the test cert FIRST so the package can load once test-signing is on.
     Import-TestCertificate $cer
