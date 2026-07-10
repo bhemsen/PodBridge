@@ -33,6 +33,9 @@ public partial class App : Application
     private TrayMicController? _trayMicController;
     private TrayNoiseControlController? _trayNoiseControlController;
     private IBleScanner? _bleScanner;
+    private BleScannerSupervisor? _bleScannerSupervisor;
+    private IBluetoothRadioSource? _radioSource;
+    private MicPolicyEngine? _micPolicyEngine;
     private IAudioSessionMonitor? _audioSessionMonitor;
     private IAudioEndpointChangeMonitor? _audioEndpointChangeMonitor;
 
@@ -101,7 +104,16 @@ public partial class App : Application
         _trayBatteryController.Start();
 
         _bleScanner = services.GetRequiredService<IBleScanner>();
-        _bleScanner.Start();
+
+        // Phase-8 hardening (issue #55): drive scanning through the supervisor so a
+        // Bluetooth-radio toggle restarts the watcher cleanly. Resolve + Start the
+        // supervisor (it starts the scanner and subscribes to the radio source) BEFORE
+        // starting the radio source, so no radio transition is missed.
+        _bleScannerSupervisor = services.GetRequiredService<BleScannerSupervisor>();
+        _bleScannerSupervisor.Start();
+
+        _radioSource = services.GetRequiredService<IBluetoothRadioSource>();
+        _radioSource.Start();
     }
 
     // Wires and starts the Phase-4 mic-profile policy on the background host so
@@ -116,6 +128,7 @@ public partial class App : Application
         var services = _host!.Services;
 
         var engine = services.GetRequiredService<MicPolicyEngine>();
+        _micPolicyEngine = engine;
         _trayMicController = TrayMicController.Create(
             _trayIcon!, engine, new MicPolicyModeStore(), Dispatcher);
         _trayMicController.Start();
@@ -281,10 +294,24 @@ public partial class App : Application
         _trayStatusController?.Dispose();
         _trayStatusController = null;
 
-        // Stop scanning so no advertisement drives the pipeline during teardown; the
-        // container still disposes the scanner (and the rest of the pipeline) below.
+        // Stop the radio source first so no radio transition drives a restart during
+        // teardown, then dispose the supervisor (unsubscribing it) and stop scanning so no
+        // advertisement drives the pipeline. The container still disposes the scanner,
+        // supervisor, and radio source (and the rest of the pipeline) below.
+        _radioSource?.Stop();
+        _radioSource = null;
+
+        _bleScannerSupervisor?.Dispose();
+        _bleScannerSupervisor = null;
+
         _bleScanner?.Stop();
         _bleScanner = null;
+
+        // Graceful-shutdown restore (issue #55): return the default audio endpoints to the
+        // user's prior routing so PodBridge leaves no rerouted devices behind. Runs before
+        // the container disposes the engine; best-effort and never throws.
+        _micPolicyEngine?.Restore();
+        _micPolicyEngine = null;
 
         // Stop the comms-session monitor so no capture event drives the mic-policy
         // engine during teardown; the container still disposes the monitor and engine.

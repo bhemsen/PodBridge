@@ -40,6 +40,11 @@ public sealed class MicPolicyEngine : IDisposable
     private readonly IAudioEndpointChangeMonitor _endpointChangeMonitor;
     private readonly Lock _gate = new();
 
+    // The user's endpoint-role assignment captured BEFORE the engine first mutated it —
+    // the "prior" state the restore path returns audio to on an apply failure or on
+    // graceful shutdown (hardening: PodBridge leaves no rerouted audio behind).
+    private readonly Dictionary<(AudioRole Role, AudioEndpointDirection Direction), string> _baseline = [];
+
     private MicPolicyMode _mode = MicPolicyMode.HiFiLock;
     private bool _callModeActive;
     private bool _commsCaptureOpen;
@@ -71,7 +76,8 @@ public sealed class MicPolicyEngine : IDisposable
         _sessionMonitor.CommunicationsCaptureStarted += OnCommsCaptureStarted;
         _sessionMonitor.CommunicationsCaptureStopped += OnCommsCaptureStopped;
         _endpointChangeMonitor.EndpointsChanged += OnEndpointsChanged;
-        Mutate(static () => { }); // establish the default HiFi-lock assignment
+        CaptureBaseline();         // snapshot the user's prior routing before we touch it
+        Mutate(static () => { });  // establish the default HiFi-lock assignment
     }
 
     /// <summary>Raised when the no-alternate-mic degrade warning turns on or off.</summary>
@@ -109,6 +115,21 @@ public sealed class MicPolicyEngine : IDisposable
     /// after a device-topology change (a device plugged in or removed).
     /// </summary>
     public void Refresh() => Mutate(static () => { });
+
+    /// <summary>
+    /// Restores the endpoint-role assignment captured before the engine's first apply —
+    /// the user's prior audio routing. Call it on graceful shutdown so PodBridge leaves
+    /// no rerouted default devices behind; the apply path also calls it internally to roll
+    /// back a half-applied assignment when an endpoint-set fails (hardening: never crash,
+    /// never leave a broken state). Endpoints that no longer exist are skipped.
+    /// </summary>
+    public void Restore()
+    {
+        lock (_gate)
+        {
+            RestoreBaselineLocked(_audioPolicy.GetEndpoints());
+        }
+    }
 
     /// <summary>Unsubscribes from the session and endpoint-change monitors.</summary>
     public void Dispose()
@@ -162,19 +183,76 @@ public sealed class MicPolicyEngine : IDisposable
         var degraded = fallbackRender is null || fallbackCapture is null;
         _noAlternateMicWarning = degraded;
 
-        // AirPods stay the media (Console + Multimedia) render default when present.
-        AssignMediaRender(airPodsRender);
-
-        if (ShouldPromoteToAirPods(degraded))
+        try
         {
-            AssignComms(airPodsRender, airPodsCapture);
-        }
-        else if (!degraded)
-        {
-            AssignComms(fallbackRender, fallbackCapture);
-        }
+            // AirPods stay the media (Console + Multimedia) render default when present.
+            AssignMediaRender(airPodsRender);
 
-        // Degraded and not promoted: comms is left untouched — no silent HFP.
+            if (ShouldPromoteToAirPods(degraded))
+            {
+                AssignComms(airPodsRender, airPodsCapture);
+            }
+            else if (!degraded)
+            {
+                AssignComms(fallbackRender, fallbackCapture);
+            }
+
+            // Degraded and not promoted: comms is left untouched — no silent HFP.
+        }
+        catch (Exception)
+        {
+            // A mid-apply endpoint-set failure (an undocumented IPolicyConfig HRESULT
+            // surfaced as an exception, or a device vanishing between enumerate and set)
+            // must never crash the tray or leave a half-applied assignment: roll back to
+            // the user's prior routing (constitution: graceful degradation).
+            RestoreBaselineLocked(endpoints);
+        }
+    }
+
+    // Reads the user's current default for each role/direction the engine will mutate,
+    // BEFORE the first apply changes them, so Restore can return audio to the prior state.
+    private void CaptureBaseline()
+    {
+        TryCaptureBaseline(AudioRole.Console, AudioEndpointDirection.Render);
+        TryCaptureBaseline(AudioRole.Multimedia, AudioEndpointDirection.Render);
+        TryCaptureBaseline(AudioRole.Communications, AudioEndpointDirection.Render);
+        TryCaptureBaseline(AudioRole.Communications, AudioEndpointDirection.Capture);
+    }
+
+    private void TryCaptureBaseline(AudioRole role, AudioEndpointDirection direction)
+    {
+        var id = _audioPolicy.GetDefaultEndpoint(role, direction);
+        if (id is not null)
+        {
+            _baseline[(role, direction)] = id;
+        }
+    }
+
+    // Re-applies the captured prior assignment. Caller holds _gate. Only endpoints still
+    // present are re-assigned, so a removed device never faults the restore.
+    private void RestoreBaselineLocked(IReadOnlyList<AudioEndpoint> available)
+    {
+        foreach (var (key, id) in _baseline)
+        {
+            if (available.Any(e => e.Id == id && e.Direction == key.Direction))
+            {
+                TrySetDefault(id, key.Role);
+            }
+        }
+    }
+
+    // A soft, never-throwing endpoint-set used by the restore path so rolling back can
+    // never itself crash the tray if a further set fails.
+    private void TrySetDefault(string endpointId, AudioRole role)
+    {
+        try
+        {
+            _audioPolicy.SetDefaultEndpoint(endpointId, role);
+        }
+        catch (Exception)
+        {
+            // Best-effort restore: a failing set is swallowed (graceful degradation).
+        }
     }
 
     // Whether the AirPods should currently hold the communications role.
