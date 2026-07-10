@@ -146,9 +146,9 @@ Classic-BT **L2CAP PSM `0x1001`**, cleartext, 4-byte data header `04 00 04 00`,
   across disconnect.** Source 2's "Configure Stem Long Press" section states the
   config is overwritten whenever the AirPods connect to a device that is not the
   iCloud-synced owner, so a non-Apple host **must store the config and re-send
-  (overwrite) it every time the AirPods connect** — that is "the only way to keep
-  the configuration", and the previous state must be known before the new state
-  can be set. (Source 2.)
+  (overwrite) it every time the AirPods connect** — re-pushing the stored config
+  is the only way it stays applied on a non-Apple host, and the previous state
+  must be known before the new state can be set. (Source 2.)
 - **Trigger:** re-push on the **L2CAP connect + AAP handshake-complete** event
   (the Phase-7 `IAapTransport` (re)connect event), **not** the Tier-1 BLE
   connection event — the overwrite happens after the Classic-BT/AAP reconnect.
