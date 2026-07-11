@@ -50,9 +50,9 @@ The ADOPT/AVOID harvest and per-entry evidence live in `docs/prior-art.md`.
 
 ## Success criteria
 
-- **Setup:** from a fresh install to "AirPods paired, audio playing, battery
-  visible" in ≤ 2 minutes, with **no admin rights and no driver** for the
-  default tier.
+- **Setup:** from downloading the app to "AirPods paired, audio playing, battery
+  visible" in ≤ 2 minutes, with **no admin rights, no driver, and no install** for
+  the default tier (past the expected first-run SmartScreen prompt).
 - **Audio honesty:** the tool reports the actually-negotiated codec (AAC vs SBC)
   and, on hardware that supports it, media plays over AAC; it never claims
   Apple-identical sound.
@@ -63,10 +63,12 @@ The ADOPT/AVOID harvest and per-entry evidence live in `docs/prior-art.md`.
 - **Advanced-tier checklist (optional, opt-in):** noise-control (ANC /
   Transparency / Adaptive) switching and gesture remap function on supported
   models — behind an explicit, clearly-warned install step.
-- **Invasiveness:** the default tier installs and runs without administrator
-  rights or a kernel driver (verifiable); anything more invasive is opt-in.
-- **Distribution:** a single open-source installer with no bundled paid or
-  proprietary components.
+- **Invasiveness:** the default tier runs without administrator rights or a
+  kernel driver and needs no install (verifiable); anything more invasive is opt-in.
+- **Distribution:** a single open-source, self-contained `.exe` downloaded from
+  GitHub Releases and run directly — no installer, no admin — with no bundled paid
+  or proprietary components, and a verifiable download (checksum + build-provenance
+  attestation).
 
 ## Scope
 

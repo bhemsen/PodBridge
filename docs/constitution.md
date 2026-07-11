@@ -17,7 +17,7 @@
 | Audio policy | NAudio (enumerate) + P/Invoke `IPolicyConfig`/`IPolicyConfig2`, `IAudioSessionManager2` | Only way to set default vs communications endpoints and observe mic sessions. |
 | AAP protocol | Clean-room C# module from documented facts | Reimplemented from `docs/prior-art.md` facts; no GPL source copied. |
 | Advanced tier (opt-in) | Separate C / KMDF L2CAP-bridge driver (WDK) | Only kernel drivers may open Classic-L2CAP PSM 0x1001 on Windows. |
-| Packaging | MSIX + winget (app); separate INF + `pnputil` (driver) | MSIX cannot bundle a kernel driver cleanly; driver is its own opt-in installer. |
+| Packaging | Self-contained single-file `.exe` (`PublishSingleFile`+`SelfContained` per-RID) via GitHub Releases (app); separate INF + `pnputil` (driver) | Download-and-run for Tier 1 — no MSIX/Store/installer, no admin; driver stays its own opt-in installer (MSIX cannot bundle a kernel driver cleanly). |
 | Tests | xUnit + device-independent fakes | Core must be testable with no physical AirPods. |
 | CI | GitHub Actions on `windows-latest` | Runs the single Verify command per push/PR. |
 | License | Apache-2.0 | Permissive, Store-friendly, explicit patent grant; requires clean-room (no GPL fork). |
