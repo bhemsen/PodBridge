@@ -3,10 +3,9 @@ namespace PodBridge.Core.Startup;
 /// <summary>
 /// OS-free control surface over the opt-in "start PodBridge at sign-in" option.
 /// Tier 1: no driver, no admin, no elevation. Implemented on Windows by
-/// <c>StartupTaskToggle</c> over the MSIX <c>StartupTask</c> WinRT API; the About
-/// surface reads and sets it. Auto-start is <b>opt-in and off by default</b>
-/// (the manifest declares the task <c>Enabled="false"</c>); the user's Settings /
-/// Task-Manager disable always wins and is reported honestly as
+/// <c>RunKeyStartupToggle</c> over the per-user <c>HKCU\...\Run</c> key; the About
+/// surface reads and sets it. Auto-start is <b>opt-in and off by default</b>; the
+/// user's Settings / Task-Manager disable always wins and is reported honestly as
 /// <see cref="StartupToggleState.DisabledByUser"/> — the app never overrides it.
 /// Kept in Core (behind this interface) so the toggle contract is covered by the
 /// Tier-1 device-independent test gate with a fake.
