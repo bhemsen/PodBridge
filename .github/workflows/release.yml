@@ -9,11 +9,11 @@ name: Release
 #
 # workflow_dispatch runs the full publish/SBOM/attestation pipeline (useful to
 # test the pipeline itself) but only cuts a real GitHub Release on an actual
-# `v*` tag push, mirroring the existing packaging.yml convention.
+# `v*` tag push.
 #
-# NOTE: packaging.yml (the old MSIX channel) also still triggers on `v*` and
-# would race this workflow to create the same GitHub Release. Retiring
-# packaging.yml is tracked in issue #124 and must land before the real
+# NOTE: the old MSIX channel (packaging.yml) also triggered on `v*` and would
+# have raced this workflow to create the same GitHub Release; it was retired
+# in issue #124 (Phase-5 MSIX/Store superseded, #38 closed) before the real
 # `v1.0.0` tag (issue #127) is pushed.
 #
 # NOTE: LICENSE, NOTICE, and THIRD-PARTY-NOTICES.md are still loose <Content>
