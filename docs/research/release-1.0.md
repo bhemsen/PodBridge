@@ -37,10 +37,12 @@
   ~150 MB (one dotnet/wpf issue reports 150 MB uncompressed). **Do not assume a
   number — measure PodBridge's own output.**
   <https://github.com/dotnet/wpf/issues/3070>
-- **Storage is already portable-safe** (high): 9 files already use
-  `Environment.SpecialFolder.LocalApplicationData` (`%LOCALAPPDATA%\PodBridge`)
-  for settings/logs/diagnostics/gesture-config — never the exe dir. No change
-  needed for the pivot.
+- **Storage is already portable-safe** (high): several files
+  (`MicPolicyModeStore`, `FirstRunGuidanceState`, `RollingFileLoggerProvider`,
+  `DiagnosticsFileSystemInterop`, `AdvancedTierInstallInterop`, `GestureConfigStore`)
+  already use `Environment.SpecialFolder.LocalApplicationData`
+  (`%LOCALAPPDATA%\PodBridge`) for settings/logs/diagnostics/gesture-config —
+  never the exe dir. No change needed for the pivot.
 - **Deterministic/reproducible build** (high): `Deterministic=true` is the SDK
   default; pass `-p:ContinuousIntegrationBuild=true` **only in CI** (locally it
   bakes CI paths into PDBs and breaks debugging). Add SourceLink /

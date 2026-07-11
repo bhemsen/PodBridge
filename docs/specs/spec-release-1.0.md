@@ -29,11 +29,14 @@ spec is moved to `docs/specs/archive/`.
       `IncludeNativeLibrariesForSelfExtract` + `PublishReadyToRun`, scoped so the
       plain `dotnet build`/**Verify path stays green and unchanged**. The exe
       **runs `asInvoker`, needs no admin, no install, and no sidecar files.**
-- [ ] The app's bundled legal text (`THIRD-PARTY-NOTICES.md`, and the license/
-      notice content the About window shows) is available **without any file next
-      to the exe** — embedded as a resource — so the single `.exe` is genuinely
-      self-sufficient; the About window still renders the disclaimer, Apache-2.0
-      notice, third-party notices, version, and honest audio note.
+- [ ] **All three loose payload files — `LICENSE`, `NOTICE`, and
+      `THIRD-PARTY-NOTICES.md` — are converted from `<Content>` sidecars to
+      embedded resources** (read via `Assembly.GetManifestResourceStream`, keeping
+      the existing `FallbackNotices` constant), so the single `.exe` ships its own
+      Apache-2.0 license text + NOTICE attribution + third-party notices with **no
+      file next to the exe** (Apache-2.0 §4); the About window still renders the
+      disclaimer, Apache-2.0 notice, third-party notices, version, and honest audio
+      note from the embedded copy.
 - [ ] The **opt-in auto-start-at-login** toggle works for the portable exe via a
       **per-user `HKCU\…\Run` entry** (no admin), **default OFF**, wired to the
       existing `IStartupToggle` contract; it **rewrites the stored path on enable
@@ -51,9 +54,10 @@ spec is moved to `docs/specs/archive/`.
 - [ ] The release exe is **signed per the accepted signing strategy** (or shipped
       unsigned-with-provenance per that decision) — never self-signed.
 - [ ] **Repo security posture exists and is enforced:** CodeQL (C#) scanning,
-      Dependabot (`nuget` + `github-actions`), a dependency-review/vulnerable-
-      package gate on PRs, and **all workflows hardened** (least-privilege
-      `permissions:`, third-party actions pinned to commit SHAs).
+      Dependabot (`nuget` + `github-actions`), **secret scanning + push
+      protection**, a dependency-review/vulnerable-package gate on PRs, and **all
+      workflows hardened** (least-privilege `permissions:`, third-party actions
+      pinned to commit SHAs).
 - [ ] A root **`SECURITY.md`** (supported-versions + report-via-PVR) exists,
       **Private Vulnerability Reporting is enabled**, and a **`THREAT-MODEL.md`**
       documents the local-only/no-admin/no-driver posture, the untrusted-BLE-input
@@ -72,8 +76,11 @@ spec is moved to `docs/specs/archive/`.
 - [ ] The **Phase-5 MSIX/Store work is dispositioned** per the accepted decision
       (default: archived & superseded — packaging project/workflow/manifest/msstore
       artifacts removed, `spec-packaging-distribution.md` archived, `architecture.md`
-      updated, and the blocked issue **#38** + related MSIX issues closed as
-      superseded, not completed).
+      updated). The **one open Phase-5 issue #38 is closed as superseded** (not
+      completed); the already-closed MSIX issues stay closed as historical.
+      **`packaging.yml` must be removed/disabled before or with the `v1.0.0` tag**
+      so it does not race the new release workflow to create the same GitHub
+      Release (both trigger on `v*`).
 - [ ] The **1.0 release is cut** (tag `v1.0.0`, GitHub Release with the above
       assets + notes), `docs/roadmap.md`/`docs/architecture.md` reflect the
       shipped state, and the **Tier-1 suite passes with no driver present**.
@@ -86,7 +93,8 @@ spec is moved to `docs/specs/archive/`.
 
 - Self-contained single-file publish config for `PodBridge.App` (scoped MSBuild
   props; `win-x64` + optionally `win-arm64`; R2R; measured compression choice;
-  never trimmed) and embedding the bundled notices so the exe is sidecar-free.
+  never trimmed) and embedding the three bundled legal files (`LICENSE`, `NOTICE`,
+  `THIRD-PARTY-NOTICES.md`) as resources so the exe is sidecar-free.
 - A portable **`HKCU\…\Run`** auto-start adapter behind `IStartupToggle` (default
   OFF, path self-heal), replacing the MSIX `StartupTaskToggle`.
 - A tag-triggered **release workflow**: per-RID publish, `checksums.sha256`, SBOM,
@@ -200,9 +208,14 @@ loop runs without interruption. Several are **conditional on the open decisions*
 - [ ] **Enable GitHub Private Vulnerability Reporting** (Settings → Security →
       Private vulnerability reporting → Enable) — one-time, free, owner/admin.
 - [ ] **Confirm/enable the free GitHub security features** that need repo-admin:
-      CodeQL code scanning, Dependabot (version + security), dependency review.
-      (For a public repo these are free; the workflows/config are added by the
-      implementation, but the admin toggles are the human's.)
+      CodeQL code scanning, Dependabot (version + security), dependency review,
+      **secret scanning + push protection**. (For a public repo these are free; the
+      workflows/config are added by the implementation, but the admin toggles are
+      the human's.)
+- [ ] **(Conditional on the x64+arm64 architecture decision)** access to
+      **Windows-on-ARM hardware** (or an arm64 VM) to smoke-test the arm64 asset at
+      the human-QA gate — the build cross-compiles arm64 from the x64 runner, but
+      behavioural QA of the arm64 exe needs arm64 hardware.
 - [ ] **(Recommended) Branch protection on `main`** requiring Verify + CodeQL +
       dependency review to pass and restricting force-push — so the hardened
       supply chain is actually enforced. Owner/admin action.
@@ -223,10 +236,10 @@ loop runs without interruption. Several are **conditional on the open decisions*
 | Distribution = **self-contained single-file `.exe` via GitHub Releases**; no MSIX/Store/installer for Tier 1 | The owner's explicit 1.0 direction (download-and-run, no install); unblocks the release from the paid Partner Center dependency that stalled Phase-5 #38 | 2026-07-11 |
 | Publish props **scoped behind `Condition="'$(RuntimeIdentifier)' != ''"`** | Keeps the plain `dotnet build`/Verify path (no RID) completely unaffected — Verify must not regress | 2026-07-11 |
 | **Never** set `PublishTrimmed` | SDK-disabled for WPF; errors NETSDK1168 and produces a broken app — settled constraint, not a choice | 2026-07-11 |
-| R2R **on**; `EnableCompressionInSingleFile` **decided by measurement** on the first real publish (size vs startup); result recorded in the release notes | Microsoft: the compression trade-off is app-specific — measure, don't assume; size is unknown until PodBridge's own publish | 2026-07-11 |
-| Bundled notices shipped as an **embedded resource**, not a loose `Content` file | A single-file exe must be sidecar-free; About must still show third-party notices with no file beside the exe | 2026-07-11 |
+| R2R **on**; `EnableCompressionInSingleFile` **default OFF**, enabled only if measurement shows it cuts download size materially (≥ ~20 MB) **without** a cold-start regression beyond ~300 ms; the measured result is recorded in the release notes | Microsoft: the compression trade-off is app-specific — measure, don't assume; the tie-breaker keeps two implementers from diverging and makes "measured and recorded" deterministic | 2026-07-11 |
+| The **three loose payload files** (`LICENSE`, `NOTICE`, `THIRD-PARTY-NOTICES.md`) become **embedded resources**, not `Content` sidecars; About reads the embedded copy (keep `FallbackNotices`) | A single-file exe must be sidecar-free, and a standalone-downloaded exe must still carry its Apache-2.0 license text + NOTICE attribution (Apache-2.0 §4) | 2026-07-11 |
 | Auto-start = per-user **`HKCU\…\Run`** (quoted `Environment.ProcessPath`), default OFF, path rewrite-on-enable + self-heal-on-launch; **read `StartupApproved\Run` to honour a user disable** (`DisabledByUser`) | Needs no admin, only `Microsoft.Win32.Registry` (single-file-safe, no COM/`.lnk` dep); the value *is* the command line; preserves the existing `StartupToggleState` contract. `docs/research/release-1.0.md` §4 | 2026-07-11 |
-| Free GitHub-native supply-chain baseline (attestation + `checksums.sha256` + SBOM + CodeQL + Dependabot + dependency review + hardened/pinned workflows) is the trust backbone, independent of the signing decision | All free for a public repo; attestation fails closed (stronger than a same-page checksum); lets signing stay a separate optional spend | 2026-07-11 |
+| Free GitHub-native supply-chain baseline (attestation + `checksums.sha256` + SBOM + CodeQL + Dependabot + dependency review + **secret scanning + push protection** + hardened/pinned workflows) is the trust backbone, independent of the signing decision | All free for a public repo; attestation fails closed (stronger than a same-page checksum); secret scanning + push protection back the constitution's "no secrets committed" Don't; lets signing stay a separate optional spend | 2026-07-11 |
 | Reproducible build: `Deterministic=true` (default), `ContinuousIntegrationBuild=true` **CI-only**, SourceLink/`DotNet.ReproducibleBuilds`, commit-mapped PDBs | Makes the release binary verifiable (auditable-OSS positioning); CI-only avoids baking CI paths into local-debug PDBs | 2026-07-11 |
 | `SECURITY.md` + GitHub Private Vulnerability Reporting as the sole report channel; lightweight GHSA/CVE-on-request stance | Free, ~5 min, the mainstream 2026 solo-maintainer OSS pattern; right-sized for pre-adoption scale | 2026-07-11 |
 | BLE bytes are untrusted input; keep/extend the bounds-checked `ContinuityParser` + fuzz tests; no `BinaryFormatter` anywhere | CVE-2023-24871 (OOB write in Windows' own BLE parser) is the precedent; hardening existing coverage, not a rewrite | 2026-07-11 |
@@ -264,9 +277,10 @@ by the human on real hardware, per `docs/workflow.md`). A QA manual
       Authenticode publisher) **or** deliberately unsigned-with-provenance per that
       decision — **never self-signed**.
 - [ ] **CodeQL (C#)** runs on push/PR; **Dependabot** config is active for `nuget`
-      + `github-actions`; a **dependency-review/vulnerable-package gate** runs on
-      PRs; **every workflow** has a least-privilege `permissions:` block and pins
-      third-party actions to **commit SHAs**.
+      + `github-actions`; **secret scanning + push protection** are enabled; a
+      **dependency-review/vulnerable-package gate** runs on PRs; **every workflow**
+      has a least-privilege `permissions:` block and pins third-party actions to
+      **commit SHAs**.
 - [ ] `SECURITY.md` exists (supported versions + PVR), **PVR is enabled**, and
       `THREAT-MODEL.md` covers the documented surfaces.
 - [ ] A **device-independent unit test** drives the new HKCU auto-start adapter
@@ -282,7 +296,8 @@ by the human on real hardware, per `docs/workflow.md`). A QA manual
       with **no admin and no install**; expected first-run SmartScreen warning is
       shown and the "Verify your download" steps work; tray reaches
       battery-visible in **≤ 2 minutes**; About shows the disclaimer + embedded
-      notices + version with **no file beside the exe**; the auto-start toggle
+      license/notices + version when the exe is run **from an otherwise-empty
+      folder** (no file beside the exe); the auto-start toggle
       takes effect and **persists across a reboot** (default OFF), and still fires
       after the exe folder is **moved-and-relaunched** (self-heal); settings/logs
       appear under `%LOCALAPPDATA%\PodBridge`; the **Tier-1 suite passes with no
