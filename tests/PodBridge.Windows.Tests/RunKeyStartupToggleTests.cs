@@ -105,4 +105,34 @@ public sealed class RunKeyStartupToggleTests
         Assert.Equal(StartupToggleState.DisabledByUser, state);
         Assert.Equal(QuotedCurrentPath, registry.RunValue);
     }
+
+    [Fact]
+    public async Task GetStateAsync_degrades_to_Disabled_when_the_registry_throws()
+    {
+        var toggle = new RunKeyStartupToggle(new ThrowingRunKeyRegistry(), () => CurrentPath);
+
+        var state = await toggle.GetStateAsync();
+
+        Assert.Equal(StartupToggleState.Disabled, state);
+    }
+
+    [Fact]
+    public async Task RequestEnableAsync_degrades_to_Disabled_when_the_registry_throws()
+    {
+        var toggle = new RunKeyStartupToggle(new ThrowingRunKeyRegistry(), () => CurrentPath);
+
+        var state = await toggle.RequestEnableAsync();
+
+        Assert.Equal(StartupToggleState.Disabled, state);
+    }
+
+    [Fact]
+    public async Task DisableAsync_degrades_to_Disabled_when_the_registry_throws()
+    {
+        var toggle = new RunKeyStartupToggle(new ThrowingRunKeyRegistry(), () => CurrentPath);
+
+        var state = await toggle.DisableAsync();
+
+        Assert.Equal(StartupToggleState.Disabled, state);
+    }
 }

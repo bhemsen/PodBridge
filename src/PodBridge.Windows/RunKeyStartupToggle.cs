@@ -27,6 +27,12 @@ namespace PodBridge.Windows;
 /// <see cref="StartupToggleState.DisabledByUser"/> without ever rewriting the flag or the
 /// Run value to force it back on.
 /// </para>
+/// <para>
+/// <b>Never throws:</b> per the <see cref="IStartupToggle"/> contract, every method degrades
+/// to <see cref="StartupToggleState.Disabled"/> instead of propagating a registry exception
+/// (e.g. <see cref="UnauthorizedAccessException"/> on a policy/ACL-restricted HKCU hive),
+/// mirroring the MSIX <c>StartupTaskToggle</c> it replaces.
+/// </para>
 /// Stateless: it opens the registry fresh per call and holds no handle between calls, like
 /// the MSIX toggle it replaces, so it is registered transient.
 /// </remarks>
@@ -52,25 +58,51 @@ public sealed class RunKeyStartupToggle : IStartupToggle
     }
 
     /// <inheritdoc />
-    public Task<StartupToggleState> GetStateAsync() => Task.FromResult(ReadState());
+    public Task<StartupToggleState> GetStateAsync()
+    {
+        try
+        {
+            return Task.FromResult(ReadState());
+        }
+        catch (Exception)
+        {
+            // Never throws (IStartupToggle contract): a policy/ACL-restricted HKCU Run key
+            // degrades to Disabled instead of crashing the caller (issue #117 review).
+            return Task.FromResult(StartupToggleState.Disabled);
+        }
+    }
 
     /// <inheritdoc />
     public Task<StartupToggleState> RequestEnableAsync()
     {
-        var processPath = _getProcessPath();
-        if (!string.IsNullOrEmpty(processPath))
+        try
         {
-            _registry.SetRunValue(Quote(processPath));
-        }
+            var processPath = _getProcessPath();
+            if (!string.IsNullOrEmpty(processPath))
+            {
+                _registry.SetRunValue(Quote(processPath));
+            }
 
-        return Task.FromResult(ReadState());
+            return Task.FromResult(ReadState());
+        }
+        catch (Exception)
+        {
+            return Task.FromResult(StartupToggleState.Disabled);
+        }
     }
 
     /// <inheritdoc />
     public Task<StartupToggleState> DisableAsync()
     {
-        _registry.DeleteRunValue();
-        return Task.FromResult(StartupToggleState.Disabled);
+        try
+        {
+            _registry.DeleteRunValue();
+            return Task.FromResult(StartupToggleState.Disabled);
+        }
+        catch (Exception)
+        {
+            return Task.FromResult(StartupToggleState.Disabled);
+        }
     }
 
     private StartupToggleState ReadState()
