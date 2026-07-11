@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & setup help
+    url: https://github.com/bhemsen/PodBridge/discussions
+    about: Ask questions, share setups, and get help here — not as an issue.
+  - name: 🔒 Report a security vulnerability (private)
+    url: https://github.com/bhemsen/PodBridge/security/advisories/new
+    about: Please report vulnerabilities privately via GitHub, not as a public issue.
