@@ -10,7 +10,20 @@
          the MSIX packaging project (packaging/PodBridge.Package) publish the app
          for the package. asInvoker is unchanged (app.manifest). -->
     <Platforms>AnyCPU;x64</Platforms>
-    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <!-- Self-contained single-file publish config (release-1.0). Scoped behind a RID
+       so the plain `dotnet build`/Verify path (no RuntimeIdentifier) is unaffected.
+       Never set PublishTrimmed here: the WPF SDK disables trimming and errors
+       NETSDK1168, producing a broken app. EnableCompressionInSingleFile is left
+       unset on purpose — the size/cold-start trade-off is decided by measurement
+       in #122, not assumed here. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>
