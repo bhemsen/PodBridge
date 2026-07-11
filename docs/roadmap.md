@@ -15,14 +15,17 @@
 | 2 | Battery & auto play/pause — WinRT BLE scanner + Apple-Continuity parser, tray battery (buds+case), in-ear media control | [spec](docs/specs/archive/spec-battery-status.md) | [#2](https://github.com/bhemsen/PodBridge/milestone/2) |
 | 3 | Audio transparency — negotiated-codec detection (AAC/SBC), active mic-mode display, guidance on reaching AAC | [spec](docs/specs/archive/spec-audio-transparency.md) | [#3](https://github.com/bhemsen/PodBridge/milestone/3) |
 | 4 | Microphone-profile policy — HiFi-lock / auto-switch / call-mode via IPolicyConfig + audio-session monitor | [spec](docs/specs/archive/spec-mic-profile-policy.md) | [#4](https://github.com/bhemsen/PodBridge/milestone/4) |
-| 5 | Packaging & distribution — MSIX + winget installer, disclaimer, docs, Apache-2.0, first driver-free release (MVP) | [spec](docs/specs/spec-packaging-distribution.md) | [#5](https://github.com/bhemsen/PodBridge/milestone/5) |
+| 5 | Packaging & distribution — disclaimer/About, docs, Apache-2.0 notices (retained); its **MSIX + winget/Store distribution mechanism is superseded by Phase 9** | [spec](docs/specs/spec-packaging-distribution.md) | [#5](https://github.com/bhemsen/PodBridge/milestone/5) |
 | 6 | Advanced tier: KMDF L2CAP driver + AAP writes — optional driver, ANC/Transparency/Adaptive switching, signing/test-mode UX | [spec](docs/specs/archive/spec-advanced-driver-anc.md) | [#6](https://github.com/bhemsen/PodBridge/milestone/6) |
 | 7 | Gesture remap — stem/press configuration via AAP, re-push on reconnect | [spec](docs/specs/archive/spec-gesture-remap.md) | [#7](https://github.com/bhemsen/PodBridge/milestone/7) |
 | 8 | Model & firmware coverage / hardening — broaden supported models, handle firmware fragility, diagnostics | [spec](docs/specs/archive/spec-model-coverage-hardening.md) | [#8](https://github.com/bhemsen/PodBridge/milestone/8) |
+| 9 | Release 1.0 — self-contained `.exe` distribution + security hardening (supersedes Phase 5's MSIX/Store mechanism; build-provenance attestation, checksums, SBOM, CodeQL, Dependabot, hardened workflows, SECURITY.md, threat model) | [spec](docs/specs/spec-release-1.0.md) | [#9](https://github.com/bhemsen/PodBridge/milestone/9) |
 
-Phases 1–5 are the **driver-free MVP** (the bulk of the value, low risk).
-Phases 6–8 are the **opt-in advanced tier** (kernel driver, higher risk — gated
-on the driver-signing reality documented in `docs/prior-art.md`).
+Phases 1–4 built the **driver-free Tier-1 feature set**; **Phase 9 cuts the actual
+1.0 release** as a self-contained `.exe` (superseding Phase 5's unshipped MSIX/Store
+distribution, which was blocked on a paid Microsoft Partner Center account). Phases
+6–8 are the **opt-in advanced tier** (kernel driver, higher risk — gated on the
+driver-signing reality documented in `docs/prior-art.md`).
 
 A phase gets a Spec link once `/plan` drafts it, and a Milestone link once the
 spec is merged. The milestone (open/closed + issue progress) is where status
