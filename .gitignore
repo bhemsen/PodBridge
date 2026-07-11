@@ -33,3 +33,6 @@ Desktop.ini
 # Driver build output (Tier 2)
 driver/**/x64/
 driver/**/*.cer
+
+# Local launch/marketing drafts — kept private, never published
+launch/

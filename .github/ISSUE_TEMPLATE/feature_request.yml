@@ -1,0 +1,38 @@
+name: ✨ Feature request
+description: Suggest an idea or improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: The pain point or missing capability — not the solution yet.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like PodBridge to do?
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Which tier?
+      description: >-
+        Tier 1 = driver-free, no admin (battery, play/pause, codec/mic policy).
+        Tier 2 = opt-in advanced driver (noise-control switching, gesture remap).
+      options:
+        - Tier 1 (driver-free)
+        - Tier 2 (advanced / driver)
+        - Not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: reality-check
+    attributes:
+      label: Reality check
+      options:
+        - label: This doesn't require defeating AirPods encryption or Apple-silicon-only DSP (Spatial Audio, Adaptive EQ, ear-tip fit test).
+          required: false
+        - label: I understand PodBridge is honest about Bluetooth/Windows limits (AAC is not Apple-parity sound; the microphone forces the mono HFP profile).
+          required: false

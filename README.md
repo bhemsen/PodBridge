@@ -11,6 +11,12 @@ clearly-labelled add-on.
 > descriptively to identify the hardware this software works with. PodBridge uses
 > no Apple logo.
 
+<p align="center">
+  <img src="docs/example.png" alt="PodBridge tray menu on Windows: Status Connected, Battery L and R 100%, microphone-mode and noise-control submenus, Pair / Reconnect, Export diagnostics, and About PodBridge" width="360">
+  <br>
+  <em>PodBridge lives in the system tray — battery, audio status, microphone &amp; noise-control modes, pairing, and diagnostics, one right-click away.</em>
+</p>
+
 ## Quickstart
 
 **Requires Windows 11 21H2+** (build 22621+). PodBridge is a **self-contained,
@@ -38,6 +44,30 @@ folder — there is nothing else on disk.
 
 Full instructions — download, verify, setup, mic modes, auto-start, uninstall —
 are in the **[user guide](docs/user/README.md)**.
+
+## How PodBridge compares
+
+| | **PodBridge** | MagicPods | AirPodsDesktop | Battery-only tools |
+|---|:---:|:---:|:---:|:---:|
+| Open-source | ✅ Apache-2.0 | ❌ closed | ✅ GPL-3.0 | ✅ mixed |
+| Free | ✅ | ❌ paid | ✅ | ✅ |
+| No driver / no admin by default | ✅ | ❌ kernel driver | ✅ | ✅ |
+| Battery (buds + case) | ✅ | ✅ | ✅ | ✅ |
+| Auto play/pause (in-ear) | ✅ | ✅ | ✅ | ❌ |
+| Honest AAC / codec guidance | ✅ | — | ❌ | ❌ |
+| Microphone-profile policy | ✅ | — | ❌ | ❌ |
+| Noise-control switching (ANC / Transparency) | ✅ opt-in¹ | ✅ | ❌ | ❌ |
+| Gesture remap | ✅ opt-in¹ | ✅ | ❌ | ❌ |
+
+¹ Advanced-tier features use the optional, clearly-warned add-on driver.
+"—" = not a documented focus of that tool. This reflects publicly-documented
+features (see [`docs/prior-art.md`](docs/prior-art.md)) and may change.
+
+**In short:** MagicPods matches the feature set but is paid, closed-source and
+driver-based; the open alternatives are driver-free but battery-and-play/pause
+only. **PodBridge is the only open, free, driver-free-by-default option that also
+adds codec/microphone honesty — with noise-control and gestures as an explicit
+opt-in.**
 
 ## Scope & honesty
 

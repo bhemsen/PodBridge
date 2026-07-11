@@ -1,0 +1,76 @@
+name: 🐛 Bug report
+description: Something isn't working as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! The single most useful thing you can attach is the
+        **diagnostics export** — tray → **Export diagnostics** (local-only, your
+        Bluetooth address is masked, no secrets).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect to happen, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+  - type: dropdown
+    id: model
+    attributes:
+      label: AirPods model
+      options:
+        - AirPods (2nd gen)
+        - AirPods (3rd gen)
+        - AirPods Pro
+        - AirPods Pro 2
+        - AirPods Pro 3
+        - AirPods Max
+        - Other / Unknown
+    validations:
+      required: true
+  - type: input
+    id: podbridge-version
+    attributes:
+      label: PodBridge version
+      description: From tray → About PodBridge (or the release tag you downloaded).
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Settings → System → About → OS build (e.g. Windows 11 23H2, build 22631).
+    validations:
+      required: true
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Which build?
+      options:
+        - win-x64
+        - win-arm64
+        - Not sure
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Tier
+      options:
+        - Tier 1 (driver-free / default)
+        - Tier 2 (advanced driver installed)
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics export / logs
+      description: >-
+        Paste the output of tray → Export diagnostics (local-only, Bluetooth
+        address masked). Logs also live under %LOCALAPPDATA%\PodBridge\logs.
+      render: text
