@@ -58,6 +58,47 @@ public class MicPolicyEngineRestoreTests
     }
 
     [Fact]
+    public void PersistentApplyFailure_RollbackConverges_IssuesNoFurtherSetsOnRetry()
+    {
+        var policy = SeededTwoDevicePolicy();
+        using var engine = NewEngine(policy);
+        engine.SetMode(MicPolicyMode.CallMode);
+
+        // A PERSISTENT (non-transient) failure — unlike FailOnceOnEndpointId, this never
+        // clears, so every apply attempt that tries to move a role onto the AirPods keeps
+        // failing. This is the scenario the idempotent rollback path guards: an
+        // unconditional rollback would keep re-issuing every baseline set on each retry
+        // (including roles a failed attempt never actually touched), ping-ponging
+        // apply<->rollback and re-initialising the A2DP render stream indefinitely.
+        policy.FailAlwaysOnEndpointId = ApRender;
+
+        engine.SetCallModeActive(true); // apply throws part-way -> rolls back to prior routing
+
+        // The media role genuinely changed (HiFi-lock had moved it to the AirPods), so
+        // the rollback legitimately restores it.
+        Assert.Equal(SpkRender, policy.DefaultId(AudioEndpointDirection.Render, AudioRole.Console));
+        Assert.Equal(SpkRender, policy.DefaultId(AudioEndpointDirection.Render, AudioRole.Multimedia));
+        // The comms roles were never actually moved off the fallback — the failing set
+        // never committed — so they were already at the baseline.
+        Assert.Equal(SpkRender, policy.DefaultId(AudioEndpointDirection.Render, AudioRole.Communications));
+        Assert.Equal(MicCapture, policy.DefaultId(AudioEndpointDirection.Capture, AudioRole.Communications));
+
+        var callsAfterFirstRollback = policy.SetCalls.Count;
+
+        // Simulate the OS re-notifying (OnDefaultDeviceChanged) repeatedly while the
+        // failure persists — every Refresh re-enters ApplyLocked, retries, fails, and
+        // rolls back again.
+        engine.Refresh();
+        engine.Refresh();
+
+        // Once converged, the idempotent rollback issues ZERO further sets on retry: the
+        // rolled-back state already matches the baseline, so there is nothing left to
+        // change. An unconditional rollback would keep reissuing the same already-
+        // satisfied sets on every retry (this assertion fails without the #114 fix).
+        Assert.Equal(callsAfterFirstRollback, policy.SetCalls.Count);
+    }
+
+    [Fact]
     public void Restore_SkipsRemovedEndpoints_NeverThrows()
     {
         var policy = SeededTwoDevicePolicy();

@@ -18,8 +18,21 @@ namespace PodBridge.Core.Audio;
 /// distinct mapping from the Phase 1–2 Bluetooth-device identification.
 /// </param>
 /// <param name="FriendlyName">Optional human-readable name for display / diagnostics.</param>
+/// <param name="IsHandsFreeRender">
+/// <c>true</c> when the adapter has identified this AirPods <b>render</b> endpoint as
+/// the Hands-Free (HFP, mono) profile rather than the stereo A2DP profile. Real
+/// AirPods can expose <b>both</b> an A2DP and an HFP render endpoint simultaneously,
+/// sharing one container id, so <see cref="IsAirPods"/> alone cannot tell them apart.
+/// Only meaningful when <see cref="IsAirPods"/> is <c>true</c> and
+/// <see cref="Direction"/> is <see cref="AudioEndpointDirection.Render"/>; the default
+/// <c>false</c> is correct for every capture endpoint and for adapters that cannot
+/// distinguish the two. The engine prefers the endpoint with this flag <c>false</c>
+/// (A2DP) for the media role, with a stable tie-break, so media never binds the mono
+/// HFP endpoint (issue #114).
+/// </param>
 public sealed record AudioEndpoint(
     string Id,
     AudioEndpointDirection Direction,
     bool IsAirPods,
-    string? FriendlyName = null);
+    string? FriendlyName = null,
+    bool IsHandsFreeRender = false);

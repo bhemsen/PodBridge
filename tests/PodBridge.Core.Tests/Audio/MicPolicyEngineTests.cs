@@ -123,6 +123,58 @@ public class MicPolicyEngineTests
         Assert.Equal(MicCapture, policy.DefaultId(AudioEndpointDirection.Capture, AudioRole.Communications));
     }
 
+    // ---- Deterministic A2DP-render selection (#114) -----------------------------
+
+    [Fact]
+    public void MediaRole_PrefersA2dpRenderOverHandsFree_OrderIndependent_NeverBindsHfp()
+    {
+        // Two AirPods render endpoints (A2DP "Headphones" + HFP "Headset") share one
+        // container id, so both are IsAirPods=true. Build the SAME topology in both
+        // enumeration orders and assert the media role always lands on the A2DP one.
+        var hfpEnumeratedFirst = TwoRenderProfilePolicy(handsFreeFirst: true);
+        using var engineHfpFirst = NewEngine(hfpEnumeratedFirst, new FakeAudioSessionMonitor());
+        Assert.Equal(
+            "ap-render-a2dp",
+            hfpEnumeratedFirst.DefaultId(AudioEndpointDirection.Render, AudioRole.Multimedia));
+
+        var a2dpEnumeratedFirst = TwoRenderProfilePolicy(handsFreeFirst: false);
+        using var engineA2dpFirst = NewEngine(a2dpEnumeratedFirst, new FakeAudioSessionMonitor());
+        Assert.Equal(
+            "ap-render-a2dp",
+            a2dpEnumeratedFirst.DefaultId(AudioEndpointDirection.Render, AudioRole.Multimedia));
+
+        // Media never binds the mono HFP endpoint in either enumeration order.
+        Assert.NotEqual(
+            "ap-render-hfp",
+            hfpEnumeratedFirst.DefaultId(AudioEndpointDirection.Render, AudioRole.Multimedia));
+        Assert.NotEqual(
+            "ap-render-hfp",
+            a2dpEnumeratedFirst.DefaultId(AudioEndpointDirection.Render, AudioRole.Multimedia));
+    }
+
+    // AirPods A2DP render + AirPods HFP render (sharing a container id, modelled here
+    // simply as both isAirPods: true) + a non-AirPods fallback, in the requested
+    // enumeration order, so the test can prove the pick is order-independent.
+    private static FakeAudioPolicy TwoRenderProfilePolicy(bool handsFreeFirst)
+    {
+        var policy = new FakeAudioPolicy();
+        if (handsFreeFirst)
+        {
+            policy.Add("ap-render-hfp", AudioEndpointDirection.Render, isAirPods: true, isHandsFreeRender: true);
+            policy.Add("ap-render-a2dp", AudioEndpointDirection.Render, isAirPods: true, isHandsFreeRender: false);
+        }
+        else
+        {
+            policy.Add("ap-render-a2dp", AudioEndpointDirection.Render, isAirPods: true, isHandsFreeRender: false);
+            policy.Add("ap-render-hfp", AudioEndpointDirection.Render, isAirPods: true, isHandsFreeRender: true);
+        }
+
+        policy.Add(ApCapture, AudioEndpointDirection.Capture, isAirPods: true);
+        policy.Add(SpkRender, AudioEndpointDirection.Render, isAirPods: false);
+        policy.Add(MicCapture, AudioEndpointDirection.Capture, isAirPods: false);
+        return policy;
+    }
+
     // ---- Fallback selection ----------------------------------------------------
 
     [Fact]

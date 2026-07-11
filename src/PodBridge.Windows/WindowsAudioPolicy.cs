@@ -23,6 +23,13 @@ namespace PodBridge.Windows;
 /// falls back to the endpoint friendly name (the lower-confidence path). This maps an
 /// <i>audio endpoint</i> to the AirPods — a distinct mapping from the Phase 1–2
 /// Bluetooth-device identification (research #25).</para>
+/// <para><b>A2DP-vs-HFP render disambiguation.</b> Real AirPods can expose two
+/// <c>IsAirPods</c> render endpoints at once, sharing one container id: the stereo
+/// A2DP endpoint (friendly name containing "Headphones") and the mono Hands-Free
+/// (HFP) endpoint Windows surfaces for calls (friendly name containing "Hands-Free"
+/// or "Headset"). <see cref="AudioEndpoint.IsHandsFreeRender"/> tags the latter by
+/// friendly-name match so <c>MicPolicyEngine</c> can deterministically prefer the
+/// A2DP endpoint for the media role (#114).</para>
 /// <para><b>Setting defaults.</b> Uses the undocumented <see cref="IPolicyConfig"/>
 /// <c>SetDefaultEndpoint</c> (slot 11) per <see cref="ERole"/>; NAudio and the public
 /// Core Audio APIs cannot set a default endpoint. All COM/P-Invoke is isolated here
@@ -243,7 +250,10 @@ public sealed class WindowsAudioPolicy : IAudioPolicy
             var name = NativeMethods.GetStringProperty(store, PropertyKeys.DeviceFriendlyName);
             var container = NativeMethods.GetGuidProperty(store, PropertyKeys.DeviceContainerId);
             var isAirPods = IsAirPodsEndpoint(container, name, airPodsContainer);
-            return new AudioEndpoint(id, direction, isAirPods, name);
+            var isHandsFreeRender = direction == AudioEndpointDirection.Render
+                && isAirPods
+                && IsHandsFreeRenderName(name);
+            return new AudioEndpoint(id, direction, isAirPods, name, isHandsFreeRender);
         }
         finally
         {
@@ -261,6 +271,30 @@ public sealed class WindowsAudioPolicy : IAudioPolicy
         }
 
         return AirPodsNameHeuristic.IsMatch(name);
+    }
+
+    // Windows names the Hands-Free (HFP, mono) render endpoint distinctly from the A2DP
+    // (stereo) one — e.g. "Hands-Free AG Audio (AirPods Pro)" or "Headset (AirPods
+    // Pro)" versus the A2DP endpoint's "Headphones (AirPods Pro)". Only the friendly
+    // name distinguishes them; both share PKEY_Device_ContainerId (#114).
+    private static readonly string[] HandsFreeNeedles = ["Hands-Free", "Hands Free", "Headset"];
+
+    private static bool IsHandsFreeRenderName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        foreach (var needle in HandsFreeNeedles)
+        {
+            if (name.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Reads the endpoint id string (IMMDevice::GetId) via the GetId-carrying interface;
