@@ -111,18 +111,24 @@ jobs:
           if (-not (Test-Path -LiteralPath $src)) {
             Write-Error "Expected published exe not found: $src"; exit 1
           }
-          if (-not (Test-Path -LiteralPath $srcPdb)) {
-            Write-Error "Expected published PDB not found: $srcPdb"; exit 1
-          }
           $destName = "PodBridge-$version-$rid.exe"
-          $destPdbName = "PodBridge-$version-$rid.pdb"
           New-Item -ItemType Directory -Force -Path 'release-assets' | Out-Null
           $dest = "release-assets/$destName"
-          $destPdb = "release-assets/$destPdbName"
           Copy-Item -LiteralPath $src -Destination $dest -Force
-          Copy-Item -LiteralPath $srcPdb -Destination $destPdb -Force
+          # The PDB is OPTIONAL: a self-contained single-file publish does not emit
+          # a loose PodBridge.App.pdb next to the exe (debug info stays embedded /
+          # in the bundle). Attach it only when present; never block the release on
+          # its absence — the exe + checksum + SBOM + attestation are the deliverables.
+          $destPdbName = ''
+          if (Test-Path -LiteralPath $srcPdb) {
+            $destPdbName = "PodBridge-$version-$rid.pdb"
+            Copy-Item -LiteralPath $srcPdb -Destination "release-assets/$destPdbName" -Force
+          } else {
+            Write-Host "No loose PDB at $srcPdb (embedded / not produced by single-file publish) - skipping."
+          }
           $sizeMb = [math]::Round((Get-Item -LiteralPath $dest).Length / 1MB, 1)
-          Write-Host "Published $destName ($sizeMb MB) + $destPdbName"
+          $pdbSuffix = if ($destPdbName) { " + $destPdbName" } else { '' }
+          Write-Host "Published $destName ($sizeMb MB)$pdbSuffix"
           "name=$destName" >> $env:GITHUB_OUTPUT
           "pdb_name=$destPdbName" >> $env:GITHUB_OUTPUT
           "size_mb=$sizeMb" >> $env:GITHUB_OUTPUT
@@ -131,9 +137,10 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: podbridge-exe-${{ matrix.rid }}
-          path: |
-            release-assets/${{ steps.rename.outputs.name }}
-            release-assets/${{ steps.rename.outputs.pdb_name }}
+          # Globs the exe (always) plus the pdb (only when single-file publish
+          # emitted a loose one); each matrix job's release-assets holds only its
+          # own RID's files.
+          path: release-assets/PodBridge-*
           if-no-files-found: error
 
   release:
@@ -252,8 +259,9 @@ jobs:
           $sizeLines
 
           ### Also attached
-          - Matching ``.pdb`` per architecture, for crash-report symbolication.
           - ``LICENSE``, ``NOTICE``, and ``THIRD-PARTY-NOTICES.md`` (Apache-2.0 §4).
+          - A matching ``.pdb`` per architecture when the single-file build emits
+            one (debug info is otherwise embedded in the exe).
 
           ---
           Not affiliated with, authorized, or endorsed by Apple Inc.
