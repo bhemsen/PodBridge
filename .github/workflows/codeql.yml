@@ -1,0 +1,47 @@
+name: CodeQL
+
+# C# code scanning for the repo's Security tab. Runs on push to main and on every
+# pull request. CodeQL's C# analysis needs a real build step because the solution
+# uses a .slnx (autobuild does not reliably discover it), so this workflow builds
+# PodBridge.slnx in Release explicitly between init and analyze.
+#
+# Third-party actions are pinned to tags for now; SHA-pinning the whole action
+# set is issue #123.
+#
+# Spec: docs/specs/spec-release-1.0.md
+# Research: docs/research/release-1.0.md (§3)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze (csharp)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+
+      - name: Build (manual, autobuild misses the slnx)
+        run: dotnet build PodBridge.slnx -c Release
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:csharp'
