@@ -17,14 +17,17 @@
   <!-- Self-contained single-file publish config (release-1.0). Scoped behind a RID
        so the plain `dotnet build`/Verify path (no RuntimeIdentifier) is unaffected.
        Never set PublishTrimmed here: the WPF SDK disables trimming and errors
-       NETSDK1168, producing a broken app. EnableCompressionInSingleFile is left
-       unset on purpose — the size/cold-start trade-off is decided by measurement
-       in #122, not assumed here. -->
+       NETSDK1168, producing a broken app. EnableCompressionInSingleFile is ON:
+       the measured uncompressed self-contained WPF exe is ~230 MB, far past the
+       spec's ">= ~20 MB saved" tie-breaker (docs/specs/spec-release-1.0.md), so
+       compression is enabled to shrink the download at a small one-time cold-start
+       decompression cost. -->
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishReadyToRun>true</PublishReadyToRun>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
