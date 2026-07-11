@@ -71,11 +71,12 @@ public static class ServiceCollectionExtensions
         // added/removed; the composition root starts and stops it.
         services.AddSingleton<IAudioEndpointChangeMonitor, WindowsAudioEndpointChangeMonitor>();
 
-        // Phase 5 opt-in auto-start-at-login (issue #35). The MSIX StartupTask toggle
-        // is stateless — it fetches the task fresh per call and holds no handle
-        // between calls (like the audio-state reader) — so it is transient. The About
-        // surface resolves it on demand to read and set the default-OFF option.
-        services.AddTransient<IStartupToggle, StartupTaskToggle>();
+        // Phase 5 opt-in auto-start-at-login (issue #35), replaced by the portable HKCU
+        // Run-key adapter (issue #117) now the app ships as a self-contained exe with no
+        // MSIX package identity. It is stateless — it opens the registry fresh per call and
+        // holds no handle between calls (like the audio-state reader) — so it is transient.
+        // The About surface resolves it on demand to read and set the default-OFF option.
+        services.AddTransient<IStartupToggle, RunKeyStartupToggle>();
 
         // Phase 6 Tier-2 (advanced, opt-in) AAP transport over the optional KMDF driver
         // (issue #43). Registered unconditionally and safely: with the driver absent — the
