@@ -13,19 +13,18 @@ clearly-labelled add-on.
 
 ## Quickstart
 
-**Requires Windows 11 21H2+** (build 22621+). Install with **no admin rights** from
-the Microsoft Store via winget:
+**Requires Windows 11 21H2+** (build 22621+). PodBridge is a **self-contained,
+single-file `.exe`** — no installer, no admin rights, nothing else to set up.
 
-```powershell
-winget install <StoreProductId> -s msstore --scope user
-```
-
-`<StoreProductId>` is the 12-character Store product ID, published with the first
-Store release; you can also search **"PodBridge"** in the Microsoft Store app. A
-signed **manual MSIX** is attached to each
-[GitHub Release](https://github.com/bhemsen/PodBridge/releases) as a fallback (it
-needs a one-time, admin-only certificate-trust step — see the
-[user guide](docs/user/README.md#b-manual-msix-from-github-releases-fallback-one-time-admin-step)).
+1. Download **`PodBridge-<version>-win-x64.exe`** (or `-win-arm64` on
+   Windows-on-ARM) from the latest
+   [GitHub Release](https://github.com/bhemsen/PodBridge/releases).
+2. (Recommended) [verify the download](docs/user/README.md#verify-your-download)
+   against `checksums.sha256` and the build-provenance attestation.
+3. Double-click the exe and run it. On first run Windows SmartScreen will likely
+   show **"Windows protected your PC / Unknown publisher"** — this is expected
+   for a new, unsigned download (see [why](docs/user/README.md#verify-your-download)),
+   not a sign of a problem. Click **More info → Run anyway**.
 
 **Set up in under 2 minutes:** launch PodBridge (a tray icon appears — no window,
 no UAC prompt) → right-click the icon and choose **`Pair / Reconnect`** to add
@@ -33,8 +32,12 @@ your AirPods in Windows Bluetooth settings → once they connect, the tray
 **`Status:`** line reads **`Connected`** and the **`Battery:`** line shows
 left/right/case charge. That's it: **paired, playing, battery visible.**
 
-Full instructions — install, setup, mic modes, auto-start, uninstall — are in the
-**[user guide](docs/user/README.md)**.
+Settings and logs live under `%LOCALAPPDATA%\PodBridge`. To uninstall: quit
+PodBridge (tray → `Exit`) and delete the exe and the `%LOCALAPPDATA%\PodBridge`
+folder — there is nothing else on disk.
+
+Full instructions — download, verify, setup, mic modes, auto-start, uninstall —
+are in the **[user guide](docs/user/README.md)**.
 
 ## Scope & honesty
 
@@ -58,7 +61,7 @@ Requires the .NET 10 SDK.
 
 ## Documentation
 
-- **[User guide](docs/user/README.md)** — install, setup, mic modes, auto-start, uninstall.
+- **[User guide](docs/user/README.md)** — download, verify, setup, mic modes, auto-start, uninstall.
 - [`docs/`](docs/) — vision, architecture, roadmap, and per-phase notes.
 
 ## License

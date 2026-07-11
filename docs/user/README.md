@@ -9,9 +9,10 @@ automatic play/pause, honest audio guidance and a microphone-profile policy, all
 > descriptively to identify the hardware this software works with. PodBridge uses
 > no Apple logo.
 
-This guide covers the **driver-free MVP** (Tier 1): install, the ≤ 2-minute
-fresh-install-to-battery-visible setup, the honest audio and microphone caveats,
-the microphone-profile modes, the start-with-Windows toggle, and uninstall. The
+This guide covers the **driver-free MVP** (Tier 1): download and verify, the
+≤ 2-minute fresh-run-to-battery-visible setup, the honest audio and microphone
+caveats, the microphone-profile modes, the start-with-Windows toggle, and
+uninstall. The
 optional **advanced tier** (noise-control switching) needs a separate opt-in
 driver and two machine-wide security changes; it is documented separately in the
 [**advanced-tier guide**](advanced-tier.md) and summarised under
@@ -24,64 +25,94 @@ driver and two machine-wide security changes; it is documented separately in the
 - **Windows 11 21H2 or newer** (OS build 22621+).
 - A working **Bluetooth radio** (ideally AAC-capable — see [Audio honesty](#audio-honesty-aac-vs-sbc)).
 - AirPods (2 / 3 / Pro / Pro 2 / Pro 3 / Max).
-- **No administrator rights** for the recommended install path, and **no driver**.
+- **No administrator rights** — PodBridge is a self-contained exe, not an
+  installer, and needs **no driver** for anything in this guide.
 
 ---
 
-## Install
+## Download and run
 
-There are two channels. The **Microsoft Store / winget** channel is the
-recommended, **no-admin** path. The **manual MSIX** from GitHub Releases is a
-fallback that needs a one-time, admin-only certificate-trust step.
+PodBridge ships as a **self-contained, single-file `.exe`** — no installer, no
+Microsoft Store, no `winget`, no admin rights. Downloading and double-clicking
+the file *is* the install.
 
-### A. Microsoft Store / winget (recommended, no admin)
+1. Go to [GitHub Releases](https://github.com/bhemsen/PodBridge/releases) and
+   open the latest release (the top one).
+2. Download the exe that matches your PC's architecture:
+   - **`PodBridge-<version>-win-x64.exe`** — the vast majority of Windows PCs
+     (Intel/AMD).
+   - **`PodBridge-<version>-win-arm64.exe`** — Windows-on-ARM devices (e.g. a
+     Surface Pro X/11 or another Snapdragon-based Windows laptop).
 
-PodBridge is distributed through the Microsoft Store and installs per-user with
-**no administrator prompt** (the Store pre-trusts the signature).
+   Not sure which you have? **Settings → System → About → Device specifications
+   → System type** shows "x64-based processor" or "ARM-based processor".
+3. (Recommended, takes under a minute) [Verify your download](#verify-your-download)
+   before running it.
+4. Run the exe directly from your Downloads folder (or move it anywhere you like
+   first — there is nothing to install alongside it). See
+   [Verify your download](#verify-your-download) for the SmartScreen prompt you
+   should expect on first run.
 
-From a normal (non-elevated) terminal:
+That's it — no setup wizard, no reboot, no elevation prompt.
+
+---
+
+## Verify your download
+
+PodBridge's release exe is **unsigned**, backed instead by a
+**build-provenance attestation**, a **published checksum**, and an **SBOM** —
+this is an intentional, documented trade-off (free/open-source signing that gives
+instant trust does not exist outside the Microsoft Store, which 1.0 does not use;
+see [`docs/vision.md`](../vision.md) and the release spec). Verifying the
+download is optional but recommended, especially the first time you download a
+release.
+
+### 1. Check the checksum
+
+Every release includes a `checksums.sha256` file listing the SHA-256 hash of
+each exe. From a normal (non-elevated) PowerShell, in your Downloads folder:
 
 ```powershell
-winget install <StoreProductId> -s msstore --scope user
+certutil -hashfile PodBridge-<version>-win-x64.exe SHA256
 ```
 
-`<StoreProductId>` is the 12-character Store product ID (for example, shaped like
-`9P6SKKFKSHKM`). It is published with the first Store release; until then, install
-the manual MSIX below. You can also search **"PodBridge"** in the Microsoft Store
-app and click **Get** — same no-admin install.
+Compare the printed hash (ignore case and spacing) against the matching line in
+`checksums.sha256` from the same release. They must match exactly.
 
-### B. Manual MSIX from GitHub Releases (fallback, one-time admin step)
+### 2. Check the build-provenance attestation
 
-Each release also attaches a signed `.msix` to
-[GitHub Releases](https://github.com/bhemsen/PodBridge/releases). This build is
-signed with a **self-signed** certificate that Windows does not trust by default,
-so you must **trust the certificate once** before the package will install. This
-is the reason it is a fallback and not the no-admin path.
+The release workflow also publishes a **GitHub build-provenance attestation** for
+each exe, proving it was built by PodBridge's own CI from a specific commit — not
+tampered with or substituted after the fact. With the
+[GitHub CLI](https://cli.github.com/) installed:
 
-1. Download both **`PodBridge-<tag>.msix`** and **`PodBridge-SelfSigned.cer`** from
-   the release.
-2. Trust the certificate once, from an **elevated (Run as administrator)**
-   PowerShell, in the download folder:
+```powershell
+gh attestation verify PodBridge-<version>-win-x64.exe -R bhemsen/PodBridge
+```
 
-   ```powershell
-   Import-Certificate -FilePath .\PodBridge-SelfSigned.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
-   ```
+A genuine release exe reports success; a tampered or substituted file **fails**
+this check.
 
-3. Install the package (this step needs **no** admin):
+### 3. Expect a SmartScreen warning on first run — this is normal
 
-   ```powershell
-   Add-AppxPackage -Path .\PodBridge-<tag>.msix
-   ```
+Because the exe is unsigned, the **first time you run it** Windows SmartScreen
+will very likely show:
 
-Notes:
+> **Windows protected your PC**
+> Microsoft Defender SmartScreen prevented an unrecognized app from starting.
+> Running this app might put your PC at risk. **Unknown publisher.**
 
-- App Installer checks the **machine** `TrustedPeople` store, which is why step 2
-  is admin-only. The bundled `.cer` is the public certificate only (no private
-  key). To undo trust later, remove that certificate from
-  `Cert:\LocalMachine\TrustedPeople` (admin).
-- PodBridge itself always runs **as your normal user** (`asInvoker`, no
-  elevation). Admin is needed only for the one-time cert-trust step above — never
-  for the Store channel and never at run time.
+This is the **expected, honest** behaviour for any new, unsigned download — it is
+not specific to PodBridge and it is not evidence of a problem by itself. Once
+you've verified the checksum and/or attestation above, you can proceed:
+click **More info**, then **Run anyway**.
+
+**PodBridge will never tell you to blindly bypass or disable SmartScreen.**
+If you have *not* verified the download and are unsure, don't run it — re-download
+from the official [GitHub Releases](https://github.com/bhemsen/PodBridge/releases)
+page instead. An organization-managed PC may block "Run anyway" entirely (Smart
+App Control / enterprise policy) regardless of verification; that is outside
+PodBridge's control.
 
 ---
 
@@ -211,10 +242,14 @@ Plug in or enable any second audio device and the warning clears automatically.
 
 PodBridge does **not** start automatically with Windows — auto-start is
 **off by default** (least-invasive default). To have PodBridge start when you sign
-in, open **`About PodBridge`** from the tray and turn on the **start-with-Windows**
-option. It uses the standard MSIX startup-task mechanism, so you can also review
-or disable it any time in **Task Manager → Startup apps** or **Settings → Apps →
-Startup**.
+in, open **`About PodBridge`** from the tray and turn on the **"Start PodBridge
+automatically when I sign in"** option. This writes a per-user Run entry
+(`HKEY_CURRENT_USER\...\Run`) pointing at wherever the exe currently lives — no
+admin needed. You can also review or turn it off any time in **Task Manager →
+Startup apps** or **Settings → Apps → Startup**; if you disable it there, PodBridge
+honours that and will not silently re-enable it. If you move the exe to a new
+folder, PodBridge updates the stored path the next time it launches while
+auto-start is on.
 
 ---
 
@@ -258,18 +293,20 @@ start it from the tray (**Noise control → Enable advanced tier…**) are in th
 
 ## Uninstall
 
-- **If you installed via the Store / winget:** run
-  `winget uninstall <StoreProductId>`, or go to **Settings → Apps → Installed
-  apps → PodBridge → Uninstall**. No admin needed.
-- **If you installed the manual MSIX:** uninstall the same way (Settings → Apps),
-  or run `Remove-AppxPackage` for the PodBridge package. To also remove the trust
-  you added, delete the PodBridge self-signed certificate from
-  `Cert:\LocalMachine\TrustedPeople` (admin).
+There is nothing to "uninstall" in the traditional sense — PodBridge is a single
+portable exe, not an installed package:
 
-PodBridge stores only a couple of small per-user settings files under
-`%LOCALAPPDATA%\PodBridge` (the chosen microphone mode and first-run markers);
-delete that folder if you want to remove them too. PodBridge makes **no network
-calls** except an explicit, user-visible update check — it is local-only.
+1. **Quit PodBridge** — right-click the tray icon and choose **`Exit`** (if
+   auto-start is on, turn it off first in **`About PodBridge`**, or it will just
+   start again next sign-in).
+2. **Delete the exe** you downloaded.
+3. **Delete the `%LOCALAPPDATA%\PodBridge` folder** — this removes the stored
+   microphone-mode setting, first-run markers, diagnostics exports, and logs.
+
+That's the whole removal; there is no registry install entry, no Store package,
+and (unless you enabled auto-start) no other trace on the machine. PodBridge
+makes **no network calls** except an explicit, user-visible update check — it is
+local-only.
 
 ---
 

@@ -86,12 +86,18 @@ public class UserDocsTests
     }
 
     [Fact]
-    public void UserGuide_DocumentsInstallChannelsAndAutoStartDefaultOff()
+    public void UserGuide_DocumentsDownloadAndRunPlusVerificationAndAutoStartDefaultOff()
     {
-        // No-admin Store/winget path + the manual MSIX fallback with its trust step.
-        Assert.Contains("msstore", UserGuide, StringComparison.Ordinal);
-        Assert.Contains("Import-Certificate", UserGuide, StringComparison.Ordinal);
-        Assert.Contains("Add-AppxPackage", UserGuide, StringComparison.Ordinal);
+        // release-1.0 pivot: download-and-run (no MSIX/Store/winget), with an honest
+        // verify-your-download section (checksum + attestation + SmartScreen reality).
+        Assert.Contains("win-x64", UserGuide, StringComparison.Ordinal);
+        Assert.Contains("win-arm64", UserGuide, StringComparison.Ordinal);
+        Assert.Contains("certutil -hashfile", UserGuide, StringComparison.Ordinal);
+        Assert.Contains("gh attestation verify", UserGuide, StringComparison.Ordinal);
+        Assert.Contains("Unknown publisher", UserGuide, StringComparison.Ordinal);
+        Assert.DoesNotContain("msstore", UserGuide, StringComparison.Ordinal);
+        Assert.DoesNotContain("winget install", UserGuide, StringComparison.Ordinal);
+        Assert.DoesNotContain("Add-AppxPackage", UserGuide, StringComparison.Ordinal);
 
         // Auto-start (issue #35) is opt-in, default OFF.
         Assert.Contains("off by default", UserGuide, StringComparison.OrdinalIgnoreCase);
