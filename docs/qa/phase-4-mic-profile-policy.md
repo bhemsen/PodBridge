@@ -151,6 +151,15 @@ For each: perform the **Action**, compare against **Expected**, tick the box, ad
 
 `[ ] PASS   [ ] FAIL`  Notes: ______________________________
 
+### 5.6a Smooth playback — no chopped audio, no endpoint-reassignment loop (regression) — [real-AirPods]
+- **Needs:** **real AirPods** + a second audio device; **no** call/mic app.
+- **Background:** the mic-policy engine writes default endpoints via `IPolicyConfig`; each write can raise the OS default-changed notification, which the engine re-processes. Before the idempotence fix (`MicPolicyEngine.SetDefaultIfChanged`) the engine re-applied an already-satisfied assignment on every such notification, forming a **self-feeding loop** that continuously re-initialised the A2DP render stream — heard as **playback chopped "after every letter."** The fix skips no-op sets so apply converges to a fixed point.
+- **Action:** Select `HiFi-lock`. Play continuous stereo media (music/speech) through the AirPods for **≥ 60 s** without touching the tray. Then switch to `Auto-switch` (still no call app) and keep listening for another **≥ 60 s**.
+- **Expected:** Playback is **continuous and clean** — no repeated micro-dropouts, stutter, or gaps, and no audible re-connect/re-init clicks. Audio stays **stereo A2DP** (`Mic: High quality (A2DP)`). If you hear chopped/stuttering output that clears only when the mic policy is disabled, that is a FAIL — capture the selected mode, whether media is stereo or mono, and whether it correlates with mic use.
+- **Maps to:** post-Phase-4 regression fix (idempotent apply); constitution graceful-degradation + honest-audio.
+
+`[ ] PASS   [ ] FAIL`  Notes: ______________________________
+
 ### 5.7 Auto-switch — AirPods mic during a call, A2DP restored after — [real-AirPods]
 - **Needs:** **real AirPods** + second audio device + media app + call/mic app.
 - **Action:** Select `Auto-switch`. Play stereo media through the AirPods. Open a call/mic app so a Communications capture session goes live; speak/observe; then end the call / close the app.
@@ -215,8 +224,9 @@ For each: perform the **Action**, compare against **Expected**, tick the box, ad
 - **`IPolicyConfig`/`IPolicyConfig2` are undocumented, reverse-engineered COM.** The GUID/vtable/`SetDefaultEndpoint` signature can vary across Windows 11 builds; it is confirmed by the `chore:research-ipolicyconfig` comment and isolated in `WindowsAudioPolicy`. Verify on the actual build under test.
 - **Fallback device is auto-picked, not a picker.** The comms fallback is the current non-AirPods default-communications device, else the first available non-AirPods endpoint. A per-device chooser is intentionally deferred to a later QoL adhoc (spec prior decision) — not a Phase-4 defect.
 - **Comms/COM-bound paths are QA-gate-verified, not unit-tested.** The **duck reconciliation** (`WindowsAudioSessionMonitor`) and the **`IMMNotificationClient` endpoint-change adapter** (`WindowsAudioEndpointChangeMonitor`) are COM/hardware-bound and there is **no Windows test project**, so they are exercised only here at the QA gate (the fix agent added a device-independent test for the Core change-monitor → `Refresh` wiring, which Verify covers). Spot-check them via §5.9 and §5.10.
+- **Two AirPods render endpoints share one container-id (deterministic-selection hardening).** Real AirPods surface **both** a stereo A2DP render endpoint *and* a Hands-Free (HFP) render endpoint under the same `PKEY_Device_ContainerId`, so `WindowsAudioPolicy` tags **both** `IsAirPods=true` and Core's `MicPolicyEngine.FindAirPods` picks the first enumerated one. Within an unchanged topology MMDevice enumeration order is stable, so the media role lands on one consistent endpoint and the idempotent apply converges. **Not yet guaranteed by code:** an adapter signal distinguishing the A2DP (media) render from the HFP render, so Core could *prefer* stereo deterministically. Deferred pending on-device validation of the A2DP-vs-HFP endpoint semantics (needs real hardware). **Watch for at §5.6/§5.6a:** if media ever plays **mono** in `HiFi-lock` with a second device present, the media role bound to the HFP endpoint — file it; that is the trigger to land the deterministic-selection fix.
 
-> **Follow-ups deferred by the Phase-4 fix pass:** none — PR #82 fixed all three confirmed review nits (duck reconciliation, launch degrade toast, live device-topology `Refresh`) with no code deferral; the only open item is the per-device fallback picker noted above, which the spec already deferred to a later adhoc.
+> **Follow-ups deferred (post-Phase-4 fix passes):** (1) the per-device fallback **picker** noted above (spec already deferred to a later adhoc); (2) **deterministic A2DP-render selection** among the two AirPods render endpoints — the idempotent-apply regression fix (`SetDefaultIfChanged`, §5.6a) relies on stable enumeration order for loop termination; making it order-independent needs the adapter A2DP/HFP signal above and on-device validation, so it is deferred to this QA gate. PR #82 earlier fixed all three of its review nits (duck reconciliation, launch degrade toast, live device-topology `Refresh`) with no code deferral.
 
 ---
 

@@ -337,21 +337,21 @@ public partial class App : Application
         _bleScanner?.Stop();
         _bleScanner = null;
 
-        // Graceful-shutdown restore (issue #55): return the default audio endpoints to the
-        // user's prior routing so PodBridge leaves no rerouted devices behind. Runs before
-        // the container disposes the engine; best-effort and never throws.
-        _micPolicyEngine?.Restore();
-        _micPolicyEngine = null;
-
-        // Stop the comms-session monitor so no capture event drives the mic-policy
-        // engine during teardown; the container still disposes the monitor and engine.
+        // Stop the mic-policy monitors BEFORE the restore below. A comms-capture event or a
+        // topology change would otherwise drive a Refresh that re-asserts the AirPods routing
+        // and undoes the restore (and re-enters the SetDefaultEndpoint apply cycle) mid-teardown.
+        // The container still disposes the monitors and engine.
         _audioSessionMonitor?.Stop();
         _audioSessionMonitor = null;
 
-        // Stop the device-topology change source so no endpoint event drives a Refresh
-        // during teardown; the container still disposes it.
         _audioEndpointChangeMonitor?.Stop();
         _audioEndpointChangeMonitor = null;
+
+        // Graceful-shutdown restore (issue #55): with the monitors quiesced, return the default
+        // audio endpoints to the user's prior routing so PodBridge leaves no rerouted devices
+        // behind. Runs before the container disposes the engine; best-effort and never throws.
+        _micPolicyEngine?.Restore();
+        _micPolicyEngine = null;
 
         // Close the About window if the user left it open, so no window keeps the
         // process alive after an explicit shutdown.

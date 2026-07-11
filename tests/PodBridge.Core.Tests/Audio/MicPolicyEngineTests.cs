@@ -63,6 +63,29 @@ public class MicPolicyEngineTests
         Assert.Equal(MicCapture, policy.DefaultId(AudioEndpointDirection.Capture, AudioRole.Communications));
     }
 
+    // ---- Idempotence / no feedback loop ---------------------------------------
+
+    [Fact]
+    public void SteadyState_RedundantRefresh_IssuesNoFurtherSets()
+    {
+        var policy = TwoDevicePolicy();
+        var monitor = new FakeAudioSessionMonitor();
+        using var engine = NewEngine(policy, monitor);
+
+        // The constructor's initial apply established the HiFi-lock assignment.
+        var callsAfterInitialApply = policy.SetCalls.Count;
+
+        // A redundant Refresh — exactly what a self-triggered OnDefaultDeviceChanged causes
+        // on real hardware — must issue ZERO further SetDefaultEndpoint calls once at steady
+        // state. Otherwise each re-set re-fires the OS default-changed notification and the
+        // apply loops, continuously re-initialising the Bluetooth render stream (chopped
+        // playback — the post-Phase-4 regression this idempotence guards against).
+        engine.Refresh();
+        engine.Refresh();
+
+        Assert.Equal(callsAfterInitialApply, policy.SetCalls.Count);
+    }
+
     [Fact]
     public void HiFiLock_IgnoresCommsSession_KeepingCommsOnFallback()
     {

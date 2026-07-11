@@ -279,20 +279,38 @@ public sealed class MicPolicyEngine : IDisposable
             return;
         }
 
-        _audioPolicy.SetDefaultEndpoint(airPodsRender.Id, AudioRole.Console);
-        _audioPolicy.SetDefaultEndpoint(airPodsRender.Id, AudioRole.Multimedia);
+        SetDefaultIfChanged(airPodsRender, AudioRole.Console);
+        SetDefaultIfChanged(airPodsRender, AudioRole.Multimedia);
     }
 
     private void AssignComms(AudioEndpoint? render, AudioEndpoint? capture)
     {
         if (render is not null)
         {
-            _audioPolicy.SetDefaultEndpoint(render.Id, AudioRole.Communications);
+            SetDefaultIfChanged(render, AudioRole.Communications);
         }
 
         if (capture is not null)
         {
-            _audioPolicy.SetDefaultEndpoint(capture.Id, AudioRole.Communications);
+            SetDefaultIfChanged(capture, AudioRole.Communications);
+        }
+    }
+
+    // Assigns the role's default ONLY when it differs from the current assignment. This
+    // idempotence is load-bearing, not a micro-optimisation. ApplyLocked re-runs on every
+    // EndpointsChanged, and that event fires (via WindowsAudioEndpointChangeMonitor's
+    // OnDefaultDeviceChanged) after our OWN SetDefaultEndpoint calls. IF IPolicyConfig
+    // re-notifies on a set to the already-default device — the suspected mechanism behind
+    // the chopped-playback report, though the OS contract does not document no-op
+    // notifications — an unconditional re-apply self-triggers indefinitely, and every
+    // re-set tears down and re-initialises the (A2DP Bluetooth) render stream. Converging
+    // apply to a fixed point (no redundant set once satisfied) breaks that cycle and is
+    // correct and harmless even if a no-op set turns out to be silent.
+    private void SetDefaultIfChanged(AudioEndpoint endpoint, AudioRole role)
+    {
+        if (_audioPolicy.GetDefaultEndpoint(role, endpoint.Direction) != endpoint.Id)
+        {
+            _audioPolicy.SetDefaultEndpoint(endpoint.Id, role);
         }
     }
 
