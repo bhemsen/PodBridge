@@ -42,11 +42,14 @@ public class MicPolicyEngineRestoreTests
     {
         var policy = SeededTwoDevicePolicy();
         using var engine = NewEngine(policy);
+        engine.SetMode(MicPolicyMode.CallMode);
 
-        // Inject a failure on the very first set of the next apply (the media render set).
+        // Inject a failure on the comms-render set that the Call-mode promotion is about to
+        // perform. Apply is idempotent — the already-satisfied media render role is skipped —
+        // so the failure must ride a role that genuinely changes (comms → AirPods).
         policy.FailOnceOnEndpointId = ApRender;
 
-        engine.Refresh(); // apply throws part-way → engine rolls back to the prior routing
+        engine.SetCallModeActive(true); // apply throws part-way → engine rolls back to prior routing
 
         Assert.Equal(SpkRender, policy.DefaultId(AudioEndpointDirection.Render, AudioRole.Console));
         Assert.Equal(SpkRender, policy.DefaultId(AudioEndpointDirection.Render, AudioRole.Multimedia));
