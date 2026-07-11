@@ -1,11 +1,11 @@
 name: Release
 
 # Tag-triggered release workflow (release-1.0, issue #122): publishes a
-# self-contained, single-file .exe per RID (win-x64, win-arm64), a
-# checksums.sha256, a CycloneDX SBOM, and a build-provenance attestation, then
-# creates a GitHub Release with all of it attached. This is independent of the
-# dotnet-based Verify gate (ci.yml) and does not change the plain
-# `dotnet build`/Verify path.
+# self-contained, single-file .exe per RID (win-x64, win-arm64) plus its PDB,
+# a checksums.sha256 (exe assets), a CycloneDX SBOM, and a build-provenance
+# attestation, then creates a GitHub Release with all of it attached. This is
+# independent of the dotnet-based Verify gate (ci.yml) and does not change the
+# plain `dotnet build`/Verify path.
 #
 # workflow_dispatch runs the full publish/SBOM/attestation pipeline (useful to
 # test the pipeline itself) but only cuts a real GitHub Release on an actual
@@ -15,6 +15,14 @@ name: Release
 # would race this workflow to create the same GitHub Release. Retiring
 # packaging.yml is tracked in issue #124 and must land before the real
 # `v1.0.0` tag (issue #127) is pushed.
+#
+# NOTE: LICENSE, NOTICE, and THIRD-PARTY-NOTICES.md are still loose <Content>
+# files copied beside the exe at build time (embedding them as resources
+# inside the exe itself is issue #116, open, no PR ordering dependency here).
+# Until #116 lands, this workflow copies those three root files straight into
+# release-assets so every v* tag Release stays Apache-2.0 §4-compliant (license
+# text + NOTICE distributed with the binary) regardless of #116's landing
+# order; #116 additionally makes the running exe itself sidecar-free.
 #
 # Third-party actions are pinned to tags for now; SHA-pinning the whole action
 # set is issue #123.
@@ -93,30 +101,40 @@ jobs:
           -p:Version=${{ needs.version.outputs.version }}
           -o publish/${{ matrix.rid }}
 
-      - name: Rename published exe to the release asset name
+      - name: Rename published exe + pdb to the release asset names
         id: rename
         shell: pwsh
         run: |
           $rid = '${{ matrix.rid }}'
           $version = '${{ needs.version.outputs.version }}'
           $src = "publish/$rid/PodBridge.App.exe"
+          $srcPdb = "publish/$rid/PodBridge.App.pdb"
           if (-not (Test-Path -LiteralPath $src)) {
             Write-Error "Expected published exe not found: $src"; exit 1
           }
+          if (-not (Test-Path -LiteralPath $srcPdb)) {
+            Write-Error "Expected published PDB not found: $srcPdb"; exit 1
+          }
           $destName = "PodBridge-$version-$rid.exe"
+          $destPdbName = "PodBridge-$version-$rid.pdb"
           New-Item -ItemType Directory -Force -Path 'release-assets' | Out-Null
           $dest = "release-assets/$destName"
+          $destPdb = "release-assets/$destPdbName"
           Copy-Item -LiteralPath $src -Destination $dest -Force
+          Copy-Item -LiteralPath $srcPdb -Destination $destPdb -Force
           $sizeMb = [math]::Round((Get-Item -LiteralPath $dest).Length / 1MB, 1)
-          Write-Host "Published $destName ($sizeMb MB)"
+          Write-Host "Published $destName ($sizeMb MB) + $destPdbName"
           "name=$destName" >> $env:GITHUB_OUTPUT
+          "pdb_name=$destPdbName" >> $env:GITHUB_OUTPUT
           "size_mb=$sizeMb" >> $env:GITHUB_OUTPUT
 
-      - name: Upload exe artifact
+      - name: Upload exe + pdb artifact
         uses: actions/upload-artifact@v4
         with:
           name: podbridge-exe-${{ matrix.rid }}
-          path: release-assets/${{ steps.rename.outputs.name }}
+          path: |
+            release-assets/${{ steps.rename.outputs.name }}
+            release-assets/${{ steps.rename.outputs.pdb_name }}
           if-no-files-found: error
 
   release:
@@ -129,7 +147,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Download published exes
+      - name: Download published exes + pdbs
         uses: actions/download-artifact@v4
         with:
           pattern: podbridge-exe-*
@@ -147,6 +165,22 @@ jobs:
           }
           Set-Content -LiteralPath release-assets/checksums.sha256 -Value $lines -Encoding ascii
           Write-Host (Get-Content -LiteralPath release-assets/checksums.sha256 -Raw)
+
+      - name: Copy legal files into release assets
+        shell: pwsh
+        run: |
+          # Apache-2.0 §4: a redistributed binary must carry its own license text
+          # + NOTICE attribution. LICENSE/NOTICE/THIRD-PARTY-NOTICES.md are still
+          # loose <Content> files copied beside the exe at build time (embedding
+          # them inside the exe itself is issue #116, open with no landing-order
+          # dependency on this workflow). Attaching the root copies to the Release
+          # here keeps every v* tag compliant regardless of that ordering.
+          foreach ($f in 'LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.md') {
+            if (-not (Test-Path -LiteralPath $f)) {
+              Write-Error "Expected legal file not found at repo root: $f"; exit 1
+            }
+            Copy-Item -LiteralPath $f -Destination "release-assets/$f" -Force
+          }
 
       - name: Restore solution (for SBOM generation)
         run: dotnet restore PodBridge.slnx
@@ -217,6 +251,10 @@ jobs:
 
           ### Measured size
           $sizeLines
+
+          ### Also attached
+          - Matching ``.pdb`` per architecture, for crash-report symbolication.
+          - ``LICENSE``, ``NOTICE``, and ``THIRD-PARTY-NOTICES.md`` (Apache-2.0 §4).
 
           ---
           Not affiliated with, authorized, or endorsed by Apple Inc.
