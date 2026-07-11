@@ -51,8 +51,10 @@ spec is moved to `docs/specs/archive/`.
 - [ ] The release build is **reproducible/verifiable**: `Deterministic` on,
       `ContinuousIntegrationBuild` **CI-only**, SourceLink /
       `DotNet.ReproducibleBuilds`, commit-mapped PDBs published.
-- [ ] The release exe is **signed per the accepted signing strategy** (or shipped
-      unsigned-with-provenance per that decision) — never self-signed.
+- [ ] The release exe ships **unsigned-with-provenance** (attestation + checksums
+      + SBOM as the trust anchor) with a **SignPath Foundation** application pursued
+      for a free verified-publisher signature — never self-signed; the release notes
+      set honest first-run-SmartScreen expectations.
 - [ ] **Repo security posture exists and is enforced:** CodeQL (C#) scanning,
       Dependabot (`nuget` + `github-actions`), **secret scanning + push
       protection**, a dependency-review/vulnerable-package gate on PRs, and **all
@@ -190,21 +192,13 @@ spec is moved to `docs/specs/archive/`.
 Delivered or confirmed by the human at the spec-acceptance gate so the implement
 loop runs without interruption. Several are **conditional on the open decisions**.
 
-- [ ] **Signing strategy decided** (the primary open decision — changes the release
-      workflow and the user-facing SmartScreen experience). **Conditional
-      provisioning:**
-      - *SignPath Foundation:* submit the OSS Request Form (free, no residency
-        limit) and budget for vetting turnaround — note it requires the project to
-        be **already released in the form to be signed**, so first signing may lag
-        the very first tag;
-      - *Azure Artifact Signing:* confirm maintainer **US/Canada residency**
-        (individual tier) or a ≥3-year legal entity (org tier), register, pass
-        identity validation (a few business days), and add the CI signing
-        credential as a GitHub Actions secret;
-      - *OV cert:* purchase (~$150–300/yr) and provision the FIPS HSM/USB token for
-        CI signing.
-- [ ] **Confirm maintainer country of residence / legal-entity status** — gates
-      whether the Azure individual tier is even available. (Conditional on Azure.)
+- [ ] **Signing = free + provenance (decided).** Submit the **SignPath Foundation**
+      OSS Request Form (free, no residency limit) and budget for vetting turnaround
+      — SignPath requires the project to be **already released in the form to be
+      signed**, so first signing may lag the very first tag. Until it lands, 1.0
+      ships unsigned-with-provenance; the release-cut does **not** block on SignPath
+      (attestation/checksums are the trust anchor), and a signed re-release follows
+      once SignPath is approved.
 - [ ] **Enable GitHub Private Vulnerability Reporting** (Settings → Security →
       Private vulnerability reporting → Enable) — one-time, free, owner/admin.
 - [ ] **Confirm/enable the free GitHub security features** that need repo-admin:
@@ -212,10 +206,9 @@ loop runs without interruption. Several are **conditional on the open decisions*
       **secret scanning + push protection**. (For a public repo these are free; the
       workflows/config are added by the implementation, but the admin toggles are
       the human's.)
-- [ ] **(Conditional on the x64+arm64 architecture decision)** access to
-      **Windows-on-ARM hardware** (or an arm64 VM) to smoke-test the arm64 asset at
-      the human-QA gate — the build cross-compiles arm64 from the x64 runner, but
-      behavioural QA of the arm64 exe needs arm64 hardware.
+- [ ] Access to **Windows-on-ARM hardware** (or an arm64 VM) to smoke-test the
+      arm64 asset at the human-QA gate — the build cross-compiles arm64 from the x64
+      runner, but behavioural QA of the arm64 exe needs arm64 hardware.
 - [ ] **(Recommended) Branch protection on `main`** requiring Verify + CodeQL +
       dependency review to pass and restricting force-push — so the hardened
       supply chain is actually enforced. Owner/admin action.
@@ -223,16 +216,14 @@ loop runs without interruption. Several are **conditional on the open decisions*
       email contact) and who monitors reports — a project-policy choice.
 - [ ] **Confirm the Microsoft Partner Center account is no longer needed** for 1.0
       and can be dropped (Store is out of scope).
-- [ ] **Accept the disposition of the merged Phase-5 MSIX/Store work** (default:
-      archive & supersede) — a scope decision over already-merged, reviewed PRs.
 
 ## Prior decisions
 
 | Decision | Rationale | Date |
 |---|---|---|
-| **OPEN — Signing strategy:** free+provenance (ship unsigned but attested/checksummed + apply to SignPath) **[recommended]** vs Azure Artifact Signing (~$120/yr, US/CA individual) vs OV cert (~$150–300/yr + HSM); self-signed and EV explicitly ruled out | Genuine spend/identity/residency trade-off; no option except the excluded Store removes the first-run warning — signing only shows a verified publisher and speeds reputation. `docs/research/release-1.0.md` §2 | resolved at the spec-acceptance gate |
-| **OPEN — MSIX/Store disposition:** archive & supersede **[recommended]** vs rip out vs keep dormant | Scope decision over 4 merged, reviewed PRs; "keep dormant" burns CI minutes on a dead channel + rots the roadmap, "rip out" is premature. §Risks | resolved at the spec-acceptance gate |
-| **OPEN — Target architecture:** `win-x64` + `win-arm64` **[recommended]** vs `win-x64` only | arm64 is ~a second publish line (crossgen2 from the x64 runner), covers Windows-on-ARM natively; but each RID is a separate asset to QA and arm64 smoke-test needs arm64 hardware. `docs/research/release-1.0.md` §1 | resolved at the spec-acceptance gate |
+| **Signing = free + provenance** (resolved at the gate): ship unsigned but backed by build-provenance attestation + `checksums.sha256` + SBOM, and apply to **SignPath Foundation** for free OSS OV-equivalent signing (no residency limit). Self-signed and EV ruled out; Azure/OV declined | No option except the excluded Store removes the first-run warning; the free provenance baseline is the trust anchor and SignPath adds a verified publisher at $0. `docs/research/release-1.0.md` §2 | 2026-07-11 |
+| **MSIX/Store = archive & supersede** (resolved at the gate): mark Phase 5 superseded, archive its spec, remove the packaging project/workflow/manifest/msstore artifacts + the dead `StartupTaskToggle`, close #38 as superseded | Preserves git history, stops CI waste, keeps the reusable About/auto-start/license pieces; "rip out" premature, "keep dormant" rots the roadmap. §Risks | 2026-07-11 |
+| **Target arch = `win-x64` + `win-arm64`** (resolved at the gate) | arm64 is ~a second publish line (crossgen2 from the x64 runner) and covers Windows-on-ARM natively; the extra QA asset is accepted (needs arm64 hardware at the QA gate). `docs/research/release-1.0.md` §1 | 2026-07-11 |
 | Distribution = **self-contained single-file `.exe` via GitHub Releases**; no MSIX/Store/installer for Tier 1 | The owner's explicit 1.0 direction (download-and-run, no install); unblocks the release from the paid Partner Center dependency that stalled Phase-5 #38 | 2026-07-11 |
 | Publish props **scoped behind `Condition="'$(RuntimeIdentifier)' != ''"`** | Keeps the plain `dotnet build`/Verify path (no RID) completely unaffected — Verify must not regress | 2026-07-11 |
 | **Never** set `PublishTrimmed` | SDK-disabled for WPF; errors NETSDK1168 and produces a broken app — settled constraint, not a choice | 2026-07-11 |
@@ -338,3 +329,10 @@ by the human on real hardware, per `docs/workflow.md`). A QA manual
   ratified at the gate. Implementer pre-mortem surfaced the embedded-notices
   requirement (a single file must be sidecar-free) and the scoped-condition guard;
   both baked in above.
+- 2026-07-11: **Spec-acceptance gate resolved** (AskUserQuestion). Signing = free +
+  provenance (ship unsigned with attestation/checksums/SBOM; apply to SignPath
+  Foundation). MSIX/Store = archive & supersede. Target architecture =
+  `win-x64` + `win-arm64`. All three matched the recommended defaults; baked into
+  Prior decisions and the affected Outcome/prerequisite items above. Constitution
+  packaging row + vision distribution criterion amended in this PR are accepted
+  together with the spec.
