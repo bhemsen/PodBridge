@@ -18,7 +18,7 @@ single-file `.exe`** — no installer, no admin rights, nothing else to set up.
 
 1. Download **`PodBridge-<version>-win-x64.exe`** (or `-win-arm64` on
    Windows-on-ARM) from the latest
-   [GitHub Release](https://github.com/bhemsen/PodBridge/releases).
+   [GitHub Release](https://github.com/bhemsen/PodBridge/releases/latest).
 2. (Recommended) [verify the download](docs/user/README.md#verify-your-download)
    against `checksums.sha256` and the build-provenance attestation.
 3. Double-click the exe and run it. On first run Windows SmartScreen will likely
@@ -64,6 +64,14 @@ Requires the .NET 10 SDK.
 - **[User guide](docs/user/README.md)** — download, verify, setup, mic modes, auto-start, uninstall.
 - [`docs/`](docs/) — vision, architecture, roadmap, and per-phase notes.
 
+## Special Thanks
+
+- **[Claude](https://claude.ai)** (Anthropic) — PodBridge was designed, built,
+  reviewed, and released with Claude as the AI pair-programmer.
+- **[loopkit](https://github.com/skrischer/loopkit)** (by
+  [@skrischer](https://github.com/skrischer)) — the spec → milestone → issues → PR
+  workflow that drove every phase of this project.
+
 ## License
 
 Apache-2.0. See [`LICENSE`](LICENSE), [`NOTICE`](NOTICE), and
@@ -74,3 +82,10 @@ Apache-2.0. See [`LICENSE`](LICENSE), [`NOTICE`](NOTICE), and
 Not affiliated with, authorized, or endorsed by Apple Inc. "AirPods" and "Apple"
 are trademarks of Apple Inc., used here only descriptively. PodBridge uses no
 Apple logo.
+
+PodBridge is provided **"as is", without warranty of any kind**, express or
+implied (see the Apache-2.0 License, Section 7, "Disclaimer of Warranty"). **You
+use it entirely at your own risk and responsibility.** To the maximum extent
+permitted by applicable law, the authors and contributors accept no liability for
+any damage, data loss, or Bluetooth/audio-device misbehaviour arising from its
+installation or use.
