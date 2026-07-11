@@ -7,13 +7,14 @@ namespace PodBridge.App;
 /// <summary>
 /// Read-only view model for the <see cref="AboutWindow"/>. Composes the
 /// device-independent branding/legal strings from <see cref="ProductInfo"/> (Core)
-/// with the running app version and the third-party-notices text shipped in the
-/// payload's THIRD-PARTY-NOTICES.md. Holds no mutable state; the version and notices
-/// are resolved once at construction via <see cref="Create"/>.
+/// with the running app version and the third-party-notices text embedded in the
+/// assembly as the <c>PodBridge.App.THIRD-PARTY-NOTICES.md</c> resource, so the
+/// published single exe needs no sidecar file. Holds no mutable state; the version
+/// and notices are resolved once at construction via <see cref="Create"/>.
 /// </summary>
 public sealed class AboutViewModel
 {
-    private const string NoticesFileName = "THIRD-PARTY-NOTICES.md";
+    private const string NoticesResourceName = "PodBridge.App.THIRD-PARTY-NOTICES.md";
 
     private const string FallbackNotices =
         "Full third-party notices ship in THIRD-PARTY-NOTICES.md at the project "
@@ -68,8 +69,8 @@ public sealed class AboutViewModel
 
     /// <summary>
     /// Builds the view model for the running app: the informational version from the
-    /// app assembly and the third-party notices from the shipped file (with a safe
-    /// fallback when the file is absent, e.g. an unpackaged run).
+    /// app assembly and the third-party notices from the embedded resource (with a
+    /// safe fallback when the resource is absent).
     /// </summary>
     public static AboutViewModel Create()
         => new(ResolveVersion(), LoadThirdPartyNotices());
@@ -92,19 +93,14 @@ public sealed class AboutViewModel
 
     private static string LoadThirdPartyNotices()
     {
-        try
+        var assembly = Assembly.GetExecutingAssembly();
+        using var stream = assembly.GetManifestResourceStream(NoticesResourceName);
+        if (stream is null)
         {
-            var path = Path.Combine(AppContext.BaseDirectory, NoticesFileName);
-            if (File.Exists(path))
-            {
-                return File.ReadAllText(path);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort: fall back to the built-in summary below.
+            return FallbackNotices;
         }
 
-        return FallbackNotices;
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 }
