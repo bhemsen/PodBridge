@@ -221,7 +221,20 @@ jobs:
           # Honest release notes: driver-free Tier-1 scope, the expected first-run
           # SmartScreen warning for an unsigned exe (docs/research/release-1.0.md §2),
           # and how to verify the download (checksum + provenance attestation).
+          # A curated "What's changed" section is prepended when /loopkit:ship
+          # committed a docs/release-notes/<version>.md fragment for this tag
+          # (docs/release.md); absent -> the fixed notes ship on their own.
           $tag = '${{ needs.version.outputs.tag }}'
+          $version = '${{ needs.version.outputs.version }}'
+          $fragment = "docs/release-notes/$version.md"
+          $whatsChanged = ''
+          if (Test-Path -LiteralPath $fragment) {
+            $body = (Get-Content -LiteralPath $fragment -Raw).Trim()
+            if ($body) { $whatsChanged = "`n$body`n" }
+            Write-Host "Prepended curated notes from $fragment"
+          } else {
+            Write-Host "No curated notes fragment at $fragment - fixed notes only."
+          }
           $sizeLines = (Get-ChildItem release-assets/*.exe | Sort-Object Name | ForEach-Object {
             $mb = [math]::Round($_.Length / 1MB, 1)
             "- ``$($_.Name)``: $mb MB"
@@ -231,7 +244,7 @@ jobs:
 
           Self-contained, single-file ``.exe`` per architecture — download and run,
           no installer, no admin rights.
-
+          $whatsChanged
           ### Scope (driver-free Tier-1)
           Battery, automatic play/pause, codec transparency, and the
           microphone-profile policy. Runs ``asInvoker`` — no admin rights and no
