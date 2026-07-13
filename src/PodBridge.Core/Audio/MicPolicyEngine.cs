@@ -254,7 +254,12 @@ public sealed class MicPolicyEngine : IDisposable
             // active AirPods capture endpoint to set, so the mic could NOT be engaged —
             // warn instead of silently presenting it as set. Self-clears once the capture
             // endpoint comes live (topology change → re-apply → AssignComms sets it).
-            _airPodsMicUnavailable = promote && airPodsCapture is null;
+            // Gate on airPodsRender: the warning is about a CONNECTED AirPods whose capture
+            // endpoint is absent. With NO AirPods present at all (airPodsRender null — e.g.
+            // the single-device degrade with Call-mode on, where promote is still true) it
+            // must stay off, or it would falsely claim "AirPods mic unavailable" with no
+            // AirPods connected (and double up with NoAlternateMicWarning).
+            _airPodsMicUnavailable = promote && airPodsRender is not null && airPodsCapture is null;
         }
         catch (Exception)
         {
@@ -269,12 +274,20 @@ public sealed class MicPolicyEngine : IDisposable
     }
 
     // Holds the Communications-category render keep-alive on the AirPods render endpoint
-    // to force HFP up. Nothing to engage without an AirPods render endpoint.
+    // to force HFP up. Nothing to engage without an AirPods render endpoint — and if one
+    // was previously held but the AirPods render endpoint has since vanished (disconnect
+    // while a promotion is still active), release the dangling keep-alive rather than let
+    // the held stream linger on a removed device. Stream lifetime stays strictly bounded
+    // to a present AirPods render endpoint.
     private void EngageComms(AudioEndpoint? airPodsRender)
     {
         if (airPodsRender is not null)
         {
             _commsProfileEngager.Engage(airPodsRender.Id);
+        }
+        else
+        {
+            _commsProfileEngager.Release();
         }
     }
 

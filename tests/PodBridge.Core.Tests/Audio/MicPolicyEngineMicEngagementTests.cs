@@ -83,6 +83,27 @@ public class MicPolicyEngineMicEngagementTests
     }
 
     [Fact]
+    public void CallMode_ToggleOnWithNoAirPodsConnected_DoesNotWarnAirPodsMicUnavailable()
+    {
+        // No AirPods present at all, only a non-AirPods fallback. Call-mode on still drives
+        // promote==true, but with airPodsRender==null the honest warning must NOT fire — it
+        // would otherwise falsely claim "AirPods mic unavailable" when no AirPods are even
+        // connected (regression guard for the promote && airPodsCapture-null-only bug).
+        var policy = NoAirPodsAtAllPolicy();
+        var monitor = new FakeAudioSessionMonitor();
+        using var engine = NewEngine(policy, monitor);
+        var events = new List<bool>();
+        engine.AirPodsMicUnavailableChanged += (_, on) => events.Add(on);
+
+        engine.SetMode(MicPolicyMode.CallMode);
+        engine.SetCallModeActive(true); // promotion requested, but no AirPods are connected
+
+        Assert.False(engine.AirPodsMicUnavailable); // no AirPods → never "AirPods mic unavailable"
+        Assert.False(engine.NoAlternateMicWarning);  // a non-AirPods fallback mic exists (as before)
+        Assert.Empty(events);                        // warning never toggled on
+    }
+
+    [Fact]
     public void AirPodsMicUnavailableText_IsHonestAndActionable()
     {
         Assert.Contains("mic", MicPolicyEngine.AirPodsMicUnavailableText, StringComparison.OrdinalIgnoreCase);
@@ -156,6 +177,29 @@ public class MicPolicyEngineMicEngagementTests
         Assert.Equal([ApRender], engager.EngageCalls); // engaged once, idempotently
     }
 
+    [Fact]
+    public void Promotion_AirPodsRenderRemoved_ReleasesDanglingStream()
+    {
+        var policy = TwoDevicePolicy();
+        var monitor = new FakeAudioSessionMonitor();
+        var engager = new FakeCommsProfileEngager();
+        using var engine = NewEngine(policy, monitor, engager);
+        engine.SetMode(MicPolicyMode.AutoSwitch);
+        monitor.RaiseCaptureStarted(); // promote → hold the keep-alive on the AirPods render
+        Assert.Equal(ApRender, engager.EngagedId);
+
+        // The AirPods disconnected mid-call: the render endpoint vanished but the comms
+        // session is still open, so the engine still wants to promote. With no render to
+        // hold it on, the held keep-alive must be released, not left dangling on a removed
+        // device (regression guard for the EngageComms(null) no-op stream leak).
+        policy.Remove(ApRender);
+        policy.Remove(ApCapture);
+        engine.Refresh();
+
+        Assert.Null(engager.EngagedId);
+        Assert.Equal(1, engager.ReleaseCalls);
+    }
+
     // ---- Fixtures --------------------------------------------------------------
 
     private static MicPolicyEngine NewEngine(
@@ -187,6 +231,20 @@ public class MicPolicyEngineMicEngagementTests
     {
         var policy = new FakeAudioPolicy();
         policy.Add(ApRender, AudioEndpointDirection.Render, isAirPods: true);
+        var spk = policy.Add(SpkRender, AudioEndpointDirection.Render, isAirPods: false);
+        var mic = policy.Add(MicCapture, AudioEndpointDirection.Capture, isAirPods: false);
+        policy.SeedDefault(spk, AudioRole.Communications);
+        policy.SeedDefault(mic, AudioRole.Communications);
+        return policy;
+    }
+
+    // No AirPods at all — only a non-AirPods render+capture fallback (NOT degraded), seeded
+    // as the user's current comms defaults so the initial HiFi-lock apply is idempotent. A
+    // comms promotion here has promote==true but airPodsRender==null, isolating the case the
+    // honest-warning gate must NOT fire on (no AirPods connected).
+    private static FakeAudioPolicy NoAirPodsAtAllPolicy()
+    {
+        var policy = new FakeAudioPolicy();
         var spk = policy.Add(SpkRender, AudioEndpointDirection.Render, isAirPods: false);
         var mic = policy.Add(MicCapture, AudioEndpointDirection.Capture, isAirPods: false);
         policy.SeedDefault(spk, AudioRole.Communications);
