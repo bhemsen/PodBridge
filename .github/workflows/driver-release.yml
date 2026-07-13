@@ -1,0 +1,154 @@
+name: Driver Release
+
+# Builds, TEST-signs, packages and publishes the OPTIONAL Tier-2 KMDF L2CAP
+# bridge driver as its OWN GitHub Release, separate from the app.
+#
+# The driver is signed with a STABLE self-signed TEST certificate (private key in
+# the DRIVER_SIGNING_PFX_* repo secrets; the matching public cert is committed at
+# driver/PodBridgeAAP/PodBridgeTest.cer and shipped in the package). It is NOT a
+# Microsoft-signed driver: loading it still requires the user to enable
+# test-signing mode (bcdedit, their own step) and trust the included cert. See
+# docs/user/advanced-tier.md. Never bundled in the app (constitution: opt-in).
+#
+# Tag scheme: driver-vMAJOR.MINOR.PATCH (namespaced away from the app's v* tags so
+# it never triggers release.yml). A tag push publishes; workflow_dispatch is a
+# build-only dry run.
+
+on:
+  push:
+    tags: ['driver-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Driver version for a dry run (e.g. 1.0.1), no Release is published'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  driver-release:
+    name: Build + test-sign + publish the advanced-tier driver
+    runs-on: windows-latest
+    permissions:
+      contents: write      # create the Release
+      id-token: write      # build-provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/driver-v*') {
+            $v = $env:GITHUB_REF -replace '^refs/tags/driver-v', ''
+          } else {
+            $v = '${{ github.event.inputs.version }}'
+            if (-not $v) { $v = '0.0.0-dryrun' }
+          }
+          if ($v -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Bad version '$v'" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Driver version: $v"
+
+      - name: Restore the stable signing PFX from secrets
+        id: pfx
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.DRIVER_SIGNING_PFX_BASE64 }}
+        run: |
+          if (-not $env:PFX_B64) { throw 'DRIVER_SIGNING_PFX_BASE64 secret is not set.' }
+          $pfx = Join-Path $env:RUNNER_TEMP 'driver-signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_B64))
+          "path=$pfx" >> $env:GITHUB_OUTPUT
+
+      - name: Build + test-sign the driver (stable PFX)
+        shell: pwsh
+        env:
+          PFX_PW: ${{ secrets.DRIVER_SIGNING_PFX_PASSWORD }}
+        run: |
+          # build-testsign.ps1 signs directly from the PFX (no cert-store import)
+          # and exports the matching public cert into the package. Passwords/paths
+          # go through PowerShell variables, never a re-parsed shell line.
+          & .\driver\PodBridgeAAP\build-testsign.ps1 -Configuration Release `
+              -PfxPath '${{ steps.pfx.outputs.path }}' -PfxPassword $env:PFX_PW
+
+      - name: Stage the distributable package
+        id: stage
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $src = 'driver/PodBridgeAAP/x64/Release'
+          $pkg = Join-Path $env:RUNNER_TEMP 'pkg'
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+          # Flat layout the installer resolves via -PackageDir / a plain extract.
+          Copy-Item 'driver/PodBridgeAAP/install-advanced-tier.ps1' $pkg -Force
+          foreach ($f in 'PodBridgeAAP.inf','PodBridgeAAP.sys','PodBridgeAAP.cat','PodBridgeTest.cer') {
+            $p = Join-Path $src $f
+            if (-not (Test-Path $p)) { throw "Missing package file: $p" }
+            Copy-Item $p $pkg -Force
+          }
+          $assets = Join-Path $env:RUNNER_TEMP 'assets'
+          New-Item -ItemType Directory -Force -Path $assets | Out-Null
+          $zip = Join-Path $assets "PodBridgeAAP-driver-$v-x64.zip"
+          Compress-Archive -Path (Join-Path $pkg '*') -DestinationPath $zip -Force
+          Copy-Item 'driver/PodBridgeAAP/PodBridgeTest.cer' $assets -Force
+          # checksums.sha256 over the published assets (lowercase hash *name).
+          Push-Location $assets
+          Get-ChildItem -File -Exclude 'checksums.sha256' | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$h *$($_.Name)"
+          } | Set-Content -Encoding ascii 'checksums.sha256'
+          Pop-Location
+          "assets=$assets" >> $env:GITHUB_OUTPUT
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          Get-ChildItem $assets | Select-Object Name, Length | Format-Table -AutoSize
+
+      - name: Attest build provenance (driver zip)
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: ${{ steps.stage.outputs.zip }}
+
+      - name: Compose release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $path = Join-Path $env:RUNNER_TEMP 'notes.md'
+          @"
+          ### PodBridge advanced-tier driver ``v$v`` (optional, opt-in)
+
+          The optional Tier-2 KMDF L2CAP bridge driver that unlocks **noise-control
+          switching** (and gesture remap, where supported). This ships and installs
+          **separately** from the PodBridge app and is **never bundled** in it.
+
+          > **This is a TEST-signed driver — NOT a Microsoft-signed driver.** Loading
+          > it on 64-bit Windows needs **two machine-wide, reversible security changes**
+          > you make yourself: enable test-signing mode (``bcdedit /set testsigning on``
+          > + reboot) and trust the included ``PodBridgeTest.cer``. Every default
+          > (Tier-1) PodBridge feature works **without** installing this. See the guide.
+
+          **Install:** download ``PodBridgeAAP-driver-$v-x64.zip``, extract it, and follow
+          **[the advanced-tier guide](https://github.com/bhemsen/PodBridge/blob/main/docs/user/advanced-tier.md)**
+          (run ``install-advanced-tier.ps1 -Action install``, then enable test-signing).
+
+          **Verify your download:**
+          - ``gh attestation verify PodBridgeAAP-driver-$v-x64.zip --repo bhemsen/PodBridge``
+          - check ``checksums.sha256``
+
+          Reference model: AirPods Pro 2. x64 only.
+          "@ | Set-Content -Encoding utf8 $path
+          "path=$path" >> $env:GITHUB_OUTPUT
+
+      - name: Publish the driver Release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/driver-v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $assets = Get-ChildItem '${{ steps.stage.outputs.assets }}' -File | ForEach-Object { $_.FullName }
+          gh release create "driver-v$v" $assets `
+            --title "PodBridge advanced-tier driver v$v" `
+            --notes-file '${{ steps.notes.outputs.path }}' `
+            --verify-tag

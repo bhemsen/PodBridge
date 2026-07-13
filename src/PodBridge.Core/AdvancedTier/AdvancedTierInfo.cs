@@ -58,7 +58,7 @@ public static class AdvancedTierInfo
     /// the app, so the App points the user at the documentation to obtain and install it.
     /// </summary>
     public const string PackageMissingFollowUp =
-        "The advanced-tier driver isn't on this PC. It ships separately from PodBridge (it is "
-        + "never bundled in the app). Opening the advanced-tier guide, which explains how to "
-        + "build or download and install it.";
+        "The advanced-tier driver isn't on this PC. It ships separately from PodBridge as its "
+        + "own download (never bundled in the app). Opening the advanced-tier guide, which links "
+        + "to the driver release and explains how to install it.";
 }
