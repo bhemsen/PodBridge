@@ -58,6 +58,7 @@ public sealed class TrayIcon : IDisposable
     private readonly MenuItem _callModeModeItem;
     private readonly MenuItem _callModeToggleItem;
     private readonly MenuItem _micWarningItem;
+    private readonly MenuItem _micUnavailableItem;
     private readonly MenuItem _noiseControlMenu;
     private readonly MenuItem _ncOffItem;
     private readonly MenuItem _ncAncItem;
@@ -92,6 +93,7 @@ public sealed class TrayIcon : IDisposable
         _callModeToggleItem = new MenuItem { Header = "AirPods mic (Call-mode)", IsCheckable = true };
         _callModeToggleItem.Click += OnCallModeToggle;
         _micWarningItem = new MenuItem { IsEnabled = false, Visibility = Visibility.Collapsed };
+        _micUnavailableItem = new MenuItem { IsEnabled = false, Visibility = Visibility.Collapsed };
         _micPolicyMenu = BuildMicPolicyMenu();
         _ncOffItem = CreateNoiseControlItem("Off", NoiseControlMode.Off);
         _ncAncItem = CreateNoiseControlItem("Noise Cancellation", NoiseControlMode.NoiseCancellation);
@@ -232,6 +234,18 @@ public sealed class TrayIcon : IDisposable
     }
 
     /// <summary>
+    /// Shows or hides the honest "AirPods mic unavailable" warning line with
+    /// <paramref name="warningText"/> — surfaced when the policy wants the AirPods mic but
+    /// Windows exposes no active AirPods capture endpoint. Distinct from
+    /// <see cref="SetMicWarning"/> (the no-alternate-mic degrade). Call on the UI thread.
+    /// </summary>
+    public void SetAirPodsMicUnavailable(bool unavailable, string warningText)
+    {
+        _micUnavailableItem.Header = warningText;
+        _micUnavailableItem.Visibility = unavailable ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
     /// Wires the callback invoked when a noise-control mode is picked from the "Noise
     /// control" submenu. The controller applies it optimistically and confirms/reverts
     /// on the device echo. Call on the UI thread.
@@ -345,6 +359,7 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(_callModeToggleItem);
         menu.Items.Add(new Separator());
         menu.Items.Add(_micWarningItem);
+        menu.Items.Add(_micUnavailableItem);
         return menu;
     }
 
