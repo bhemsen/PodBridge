@@ -35,9 +35,19 @@ public sealed class MicPolicyEngine : IDisposable
     public const string NoAlternateMicWarningText =
         "No alternate mic — AirPods mic requires HFP/mono.";
 
+    /// <summary>
+    /// Honest warning surfaced when the policy wants the AirPods mic (a comms promotion
+    /// was requested) but Windows exposes no active AirPods capture endpoint, so the mic
+    /// could not actually be engaged — never presented as set when it is not.
+    /// </summary>
+    public const string AirPodsMicUnavailableText =
+        "AirPods mic unavailable — enable Hands-Free/Headset for the AirPods in Windows " +
+        "Bluetooth settings, or re-pair.";
+
     private readonly IAudioPolicy _audioPolicy;
     private readonly IAudioSessionMonitor _sessionMonitor;
     private readonly IAudioEndpointChangeMonitor _endpointChangeMonitor;
+    private readonly ICommsProfileEngager _commsProfileEngager;
     private readonly Lock _gate = new();
 
     // The user's endpoint-role assignment captured BEFORE the engine first mutated it —
@@ -49,6 +59,7 @@ public sealed class MicPolicyEngine : IDisposable
     private bool _callModeActive;
     private bool _commsCaptureOpen;
     private bool _noAlternateMicWarning;
+    private bool _airPodsMicUnavailable;
 
     /// <summary>
     /// Wires the engine to its audio-policy and session-monitor sources and applies
@@ -61,18 +72,24 @@ public sealed class MicPolicyEngine : IDisposable
     /// <param name="endpointChangeMonitor">Device-topology change source; each change
     /// triggers a <see cref="Refresh"/> so the degrade warning tracks the fallback mic
     /// appearing or disappearing live.</param>
+    /// <param name="commsProfileEngager">Forces the AirPods HFP link up (via a silent
+    /// Communications-category render keep-alive) while they hold the comms role, so the
+    /// AirPods capture endpoint comes live; released when the AirPods are demoted.</param>
     public MicPolicyEngine(
         IAudioPolicy audioPolicy,
         IAudioSessionMonitor sessionMonitor,
-        IAudioEndpointChangeMonitor endpointChangeMonitor)
+        IAudioEndpointChangeMonitor endpointChangeMonitor,
+        ICommsProfileEngager commsProfileEngager)
     {
         ArgumentNullException.ThrowIfNull(audioPolicy);
         ArgumentNullException.ThrowIfNull(sessionMonitor);
         ArgumentNullException.ThrowIfNull(endpointChangeMonitor);
+        ArgumentNullException.ThrowIfNull(commsProfileEngager);
 
         _audioPolicy = audioPolicy;
         _sessionMonitor = sessionMonitor;
         _endpointChangeMonitor = endpointChangeMonitor;
+        _commsProfileEngager = commsProfileEngager;
         _sessionMonitor.CommunicationsCaptureStarted += OnCommsCaptureStarted;
         _sessionMonitor.CommunicationsCaptureStopped += OnCommsCaptureStopped;
         _endpointChangeMonitor.EndpointsChanged += OnEndpointsChanged;
@@ -82,6 +99,9 @@ public sealed class MicPolicyEngine : IDisposable
 
     /// <summary>Raised when the no-alternate-mic degrade warning turns on or off.</summary>
     public event EventHandler<bool>? NoAlternateMicWarningChanged;
+
+    /// <summary>Raised when the AirPods-mic-unavailable warning turns on or off.</summary>
+    public event EventHandler<bool>? AirPodsMicUnavailableChanged;
 
     /// <summary>The currently-selected policy mode (default <see cref="MicPolicyMode.HiFiLock"/>).</summary>
     public MicPolicyMode CurrentMode
@@ -102,6 +122,18 @@ public sealed class MicPolicyEngine : IDisposable
     public bool NoAlternateMicWarning
     {
         get { lock (_gate) { return _noAlternateMicWarning; } }
+    }
+
+    /// <summary>
+    /// <c>true</c> when a comms promotion to the AirPods was requested but Windows exposes
+    /// no active AirPods capture endpoint, so the AirPods mic could not be engaged. The
+    /// engine forces the HFP link up (see <see cref="ICommsProfileEngager"/>); this stays
+    /// on until the capture endpoint appears and is assigned (then it self-clears), so the
+    /// mic is never presented as set when it is not.
+    /// </summary>
+    public bool AirPodsMicUnavailable
+    {
+        get { lock (_gate) { return _airPodsMicUnavailable; } }
     }
 
     /// <summary>Selects the active <paramref name="mode"/> and re-applies the policy.</summary>
@@ -151,23 +183,31 @@ public sealed class MicPolicyEngine : IDisposable
     private void OnEndpointsChanged(object? sender, EventArgs e) => Refresh();
 
     // Applies a state change under the gate, re-applies the policy, then raises the
-    // warning-changed event OUTSIDE the lock to avoid handler reentrancy deadlocks.
+    // warning-changed events OUTSIDE the lock to avoid handler reentrancy deadlocks.
     private void Mutate(Action change)
     {
-        bool raise;
-        bool value;
+        bool raiseNoAlt, noAltValue;
+        bool raiseUnavailable, unavailableValue;
         lock (_gate)
         {
             change();
-            var before = _noAlternateMicWarning;
+            var beforeNoAlt = _noAlternateMicWarning;
+            var beforeUnavailable = _airPodsMicUnavailable;
             ApplyLocked();
-            raise = before != _noAlternateMicWarning;
-            value = _noAlternateMicWarning;
+            raiseNoAlt = beforeNoAlt != _noAlternateMicWarning;
+            noAltValue = _noAlternateMicWarning;
+            raiseUnavailable = beforeUnavailable != _airPodsMicUnavailable;
+            unavailableValue = _airPodsMicUnavailable;
         }
 
-        if (raise)
+        if (raiseNoAlt)
         {
-            NoAlternateMicWarningChanged?.Invoke(this, value);
+            NoAlternateMicWarningChanged?.Invoke(this, noAltValue);
+        }
+
+        if (raiseUnavailable)
+        {
+            AirPodsMicUnavailableChanged?.Invoke(this, unavailableValue);
         }
     }
 
@@ -182,22 +222,44 @@ public sealed class MicPolicyEngine : IDisposable
 
         var degraded = fallbackRender is null || fallbackCapture is null;
         _noAlternateMicWarning = degraded;
+        var promote = ShouldPromoteToAirPods(degraded);
 
         try
         {
             // AirPods stay the media (Console + Multimedia) render default when present.
             AssignMediaRender(airPodsRender);
 
-            if (ShouldPromoteToAirPods(degraded))
+            if (promote)
             {
+                // Force the AirPods HFP/SCO link up so its capture endpoint comes live: a
+                // routing-role set alone never wakes HFP (see ICommsProfileEngager). When
+                // the capture endpoint appears a topology change re-enters ApplyLocked and
+                // the now-present capture is assigned below, clearing the warning.
+                EngageComms(airPodsRender);
                 AssignComms(airPodsRender, airPodsCapture);
             }
-            else if (!degraded)
+            else
             {
-                AssignComms(fallbackRender, fallbackCapture);
+                // Not promoting: drop the keep-alive so Windows can release the HFP link.
+                _commsProfileEngager.Release();
+                if (!degraded)
+                {
+                    AssignComms(fallbackRender, fallbackCapture);
+                }
+
+                // Degraded and not promoted: comms is left untouched — no silent HFP.
             }
 
-            // Degraded and not promoted: comms is left untouched — no silent HFP.
+            // Honest surface (candidate D): a promotion was requested but there is no
+            // active AirPods capture endpoint to set, so the mic could NOT be engaged —
+            // warn instead of silently presenting it as set. Self-clears once the capture
+            // endpoint comes live (topology change → re-apply → AssignComms sets it).
+            // Gate on airPodsRender: the warning is about a CONNECTED AirPods whose capture
+            // endpoint is absent. With NO AirPods present at all (airPodsRender null — e.g.
+            // the single-device degrade with Call-mode on, where promote is still true) it
+            // must stay off, or it would falsely claim "AirPods mic unavailable" with no
+            // AirPods connected (and double up with NoAlternateMicWarning).
+            _airPodsMicUnavailable = promote && airPodsRender is not null && airPodsCapture is null;
         }
         catch (Exception)
         {
@@ -206,6 +268,26 @@ public sealed class MicPolicyEngine : IDisposable
             // must never crash the tray or leave a half-applied assignment: roll back to
             // the user's prior routing (constitution: graceful degradation).
             RestoreBaselineLocked(endpoints);
+            _commsProfileEngager.Release();
+            _airPodsMicUnavailable = false;
+        }
+    }
+
+    // Holds the Communications-category render keep-alive on the AirPods render endpoint
+    // to force HFP up. Nothing to engage without an AirPods render endpoint — and if one
+    // was previously held but the AirPods render endpoint has since vanished (disconnect
+    // while a promotion is still active), release the dangling keep-alive rather than let
+    // the held stream linger on a removed device. Stream lifetime stays strictly bounded
+    // to a present AirPods render endpoint.
+    private void EngageComms(AudioEndpoint? airPodsRender)
+    {
+        if (airPodsRender is not null)
+        {
+            _commsProfileEngager.Engage(airPodsRender.Id);
+        }
+        else
+        {
+            _commsProfileEngager.Release();
         }
     }
 

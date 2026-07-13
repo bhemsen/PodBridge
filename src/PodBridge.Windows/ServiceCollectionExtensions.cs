@@ -64,6 +64,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAudioSessionMonitor, WindowsAudioSessionMonitor>();
         services.AddSingleton<IAudioPolicy, WindowsAudioPolicy>();
 
+        // Issue #156: the comms-profile engager that forces the AirPods HFP link up via a
+        // silent Communications-category render keep-alive, so the AirPods capture (mic)
+        // endpoint comes live when the mic policy promotes them to the comms role — a
+        // routing-role set alone never wakes HFP. A singleton because it owns a live WASAPI
+        // render stream for as long as the AirPods hold comms; the container disposes it
+        // (IDisposable) on shutdown, releasing the stream. Render-only, no capture stream;
+        // any COM failure degrades to a no-op (constitution: graceful degradation).
+        services.AddSingleton<ICommsProfileEngager, WindowsCommsProfileEngager>();
+
         // Device-topology change source (Core Audio IMMNotificationClient). A singleton
         // owning the enumerator + notification registration for the app's lifetime
         // (disposed by the container on shutdown). It triggers MicPolicyEngine.Refresh so

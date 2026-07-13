@@ -90,7 +90,11 @@ public class MicPolicyEngineRestoreTests
     }
 
     private static MicPolicyEngine NewEngine(FakeAudioPolicy policy)
-        => new(policy, new FakeAudioSessionMonitor(), new FakeAudioEndpointChangeMonitor());
+        => new(
+            policy,
+            new FakeAudioSessionMonitor(),
+            new FakeAudioEndpointChangeMonitor(),
+            new FakeCommsProfileEngager());
 
     // AirPods + a non-AirPods fallback, with the speaker/mic seeded as the user's PRIOR
     // defaults for every role the engine mutates (captured as the restore baseline).

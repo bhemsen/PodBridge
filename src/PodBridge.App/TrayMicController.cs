@@ -28,6 +28,9 @@ public sealed class TrayMicController : IDisposable
     // repeatedly while it stays degraded).
     private bool _warningToastShown;
 
+    // Same one-shot guard for the distinct "AirPods mic unavailable" warning.
+    private bool _unavailableToastShown;
+
     private TrayMicController(
         TrayIcon tray,
         MicPolicyEngine engine,
@@ -61,20 +64,25 @@ public sealed class TrayMicController : IDisposable
     {
         _tray.SetMicPolicyHandlers(OnModeSelected, OnCallModeToggled);
         _engine.NoAlternateMicWarningChanged += OnWarningChanged;
+        _engine.AirPodsMicUnavailableChanged += OnUnavailableChanged;
 
         // Restore the persisted mode (default HiFi-lock on first run) into the engine,
         // which re-applies the endpoint-role assignment, then reflect it in the menu.
         _engine.SetMode(_store.Load());
 
-        // The engine raises NoAlternateMicWarningChanged from its constructor — before
-        // this controller could subscribe — so the initial degrade (the primary
-        // AirPods-only-at-launch case) is never delivered as an event. Replay the current
-        // warning state here so the menu line AND the one-shot toast still fire at launch.
+        // The engine raises its warning events from its constructor — before this controller
+        // could subscribe — so the initial state is never delivered as an event. Replay both
+        // current warning states here so the menu lines AND the one-shot toasts fire at launch.
         ApplyWarning(_engine.NoAlternateMicWarning);
+        ApplyUnavailable(_engine.AirPodsMicUnavailable);
     }
 
     /// <summary>Unsubscribes so no late warning event touches a disposed tray.</summary>
-    public void Dispose() => _engine.NoAlternateMicWarningChanged -= OnWarningChanged;
+    public void Dispose()
+    {
+        _engine.NoAlternateMicWarningChanged -= OnWarningChanged;
+        _engine.AirPodsMicUnavailableChanged -= OnUnavailableChanged;
+    }
 
     private void OnModeSelected(MicPolicyMode mode)
     {
@@ -93,6 +101,9 @@ public sealed class TrayMicController : IDisposable
 
     private void OnWarningChanged(object? sender, bool degraded)
         => _dispatcher.InvokeAsync(() => ApplyWarning(degraded));
+
+    private void OnUnavailableChanged(object? sender, bool unavailable)
+        => _dispatcher.InvokeAsync(() => ApplyUnavailable(unavailable));
 
     private void ApplyWarning(bool degraded)
     {
@@ -114,10 +125,31 @@ public sealed class TrayMicController : IDisposable
         }
     }
 
+    private void ApplyUnavailable(bool unavailable)
+    {
+        Render();
+
+        if (!unavailable)
+        {
+            _unavailableToastShown = false; // re-arm for the next transition into unavailable
+            return;
+        }
+
+        // One-shot toast on the transition into the unavailable state so the honest warning
+        // is noticed even with the menu closed — never a silent no-op.
+        if (!_unavailableToastShown)
+        {
+            _unavailableToastShown = true;
+            _tray.ShowNotification(WarningTitle, MicPolicyEngine.AirPodsMicUnavailableText);
+        }
+    }
+
     private void Render()
     {
         _tray.SetSelectedMicMode(_engine.CurrentMode);
         _tray.SetCallModeActive(_engine.CallModeActive);
         _tray.SetMicWarning(_engine.NoAlternateMicWarning, MicPolicyEngine.NoAlternateMicWarningText);
+        _tray.SetAirPodsMicUnavailable(
+            _engine.AirPodsMicUnavailable, MicPolicyEngine.AirPodsMicUnavailableText);
     }
 }

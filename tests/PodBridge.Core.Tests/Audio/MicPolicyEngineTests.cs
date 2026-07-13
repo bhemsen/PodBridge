@@ -219,7 +219,8 @@ public class MicPolicyEngineTests
         var policy = TwoDevicePolicy();
         var monitor = new FakeAudioSessionMonitor();
         var changeMonitor = new FakeAudioEndpointChangeMonitor();
-        using var engine = new MicPolicyEngine(policy, monitor, changeMonitor);
+        using var engine = new MicPolicyEngine(
+            policy, monitor, changeMonitor, new FakeCommsProfileEngager());
         Assert.False(engine.NoAlternateMicWarning);
 
         var events = new List<bool>();
@@ -255,8 +256,15 @@ public class MicPolicyEngineTests
     // Constructs the engine with a real audio-session monitor fake plus an inert
     // topology-change monitor (the tests that exercise topology changes construct the
     // engine explicitly with a named change monitor instead).
-    private static MicPolicyEngine NewEngine(FakeAudioPolicy policy, FakeAudioSessionMonitor monitor)
-        => new(policy, monitor, new FakeAudioEndpointChangeMonitor());
+    private static MicPolicyEngine NewEngine(
+        FakeAudioPolicy policy,
+        FakeAudioSessionMonitor monitor,
+        FakeCommsProfileEngager? engager = null)
+        => new(
+            policy,
+            monitor,
+            new FakeAudioEndpointChangeMonitor(),
+            engager ?? new FakeCommsProfileEngager());
 
     // AirPods (render + capture) plus a non-AirPods fallback (render + capture).
     private static FakeAudioPolicy TwoDevicePolicy()
