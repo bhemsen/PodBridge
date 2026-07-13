@@ -13,6 +13,7 @@ On-demand references (NOT auto-loaded — read when relevant to the task):
 - `docs/architecture.md` — components, boundaries, flows, where new code goes
 - `docs/roadmap.md` — the sequenced phases
 - `docs/workflow.md` — operational contract for `/loopkit:plan` and `/loopkit:implement`
+- `docs/release.md` — operational contract for `/loopkit:ship`
 
 ## Autonomy (within the loopkit skills)
 
