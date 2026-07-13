@@ -255,18 +255,22 @@ public sealed class MicPolicyEngine : IDisposable
     // is still swallowed (graceful degradation).
     private void TrySetDefaultIfChanged(string endpointId, AudioRole role, AudioEndpointDirection direction)
     {
-        if (_audioPolicy.GetDefaultEndpoint(role, direction) == endpointId)
-        {
-            return;
-        }
-
         try
         {
+            // The idempotence read is inside the try so the rollback path can NEVER throw,
+            // unconditionally (not merely because the current adapter's GetDefaultEndpoint
+            // happens to swallow its own errors): a throwing get degrades to "not satisfied",
+            // falling through to the equally best-effort set below.
+            if (_audioPolicy.GetDefaultEndpoint(role, direction) == endpointId)
+            {
+                return;
+            }
+
             _audioPolicy.SetDefaultEndpoint(endpointId, role);
         }
         catch (Exception)
         {
-            // Best-effort restore: a failing set is swallowed (graceful degradation).
+            // Best-effort restore: a failing get/set is swallowed (graceful degradation).
         }
     }
 
