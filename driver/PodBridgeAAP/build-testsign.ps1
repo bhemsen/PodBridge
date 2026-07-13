@@ -36,7 +36,13 @@
 param(
     [ValidateSet('Release', 'Debug')]
     [string]$Configuration = 'Release',
-    [string]$WdkBin
+    [string]$WdkBin,
+    # Optional: sign with a provided PFX instead of a locally-generated per-machine
+    # self-signed cert. The driver-release CI workflow passes the STABLE test cert
+    # (from a repo secret) here so every published build is signed by the same cert
+    # users trust once. Still a self-signed TEST cert -- NOT Microsoft-signed.
+    [string]$PfxPath,
+    [string]$PfxPassword
 )
 
 $ErrorActionPreference = 'Stop'
@@ -97,16 +103,34 @@ if (-not (Test-Path (Join-Path $outDir 'PodBridgeAAP.sys'))) {
 # Stage the INF next to the built .sys so inf2cat sees a complete package.
 Copy-Item (Join-Path $projectDir 'PodBridgeAAP.inf') $outDir -Force
 
-# 2) Create (or reuse) the self-signed test certificate.
-$cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq "CN=$certName" } | Select-Object -First 1
-if (-not $cert) {
-    Write-Host "== creating self-signed test cert =="
-    $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=$certName" `
-        -CertStoreLocation Cert:\CurrentUser\My -KeyUsage DigitalSignature `
-        -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3') -NotAfter (Get-Date).AddYears(3)
+# 2) Obtain the signing certificate + prepare the signtool arguments.
+if ($PfxPath) {
+    # Stable release cert supplied as a PFX (CI: from a repo secret). Export the
+    # matching PUBLIC cert into the package so the shipped .cer always validates
+    # the shipped .sys/.cat, and sign directly from the PFX file.
+    if (-not (Test-Path $PfxPath)) { throw "PFX not found: $PfxPath" }
+    $pfx = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+        $PfxPath, $PfxPassword, 'Exportable')
+    [IO.File]::WriteAllBytes($certFile,
+        $pfx.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+    Write-Host "Signing with provided PFX (subject $($pfx.Subject), thumbprint $($pfx.Thumbprint))"
+    Write-Host "Public cert exported: $certFile"
+    $signArgs = @('sign', '/v', '/fd', 'SHA256', '/f', $PfxPath)
+    if ($PfxPassword) { $signArgs += @('/p', $PfxPassword) }
 }
-Export-Certificate -Cert $cert -FilePath $certFile -Force | Out-Null
-Write-Host "Test cert exported: $certFile (thumbprint $($cert.Thumbprint))"
+else {
+    # Local dev: create (or reuse) a per-machine self-signed test certificate.
+    $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq "CN=$certName" } | Select-Object -First 1
+    if (-not $cert) {
+        Write-Host "== creating self-signed test cert =="
+        $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=$certName" `
+            -CertStoreLocation Cert:\CurrentUser\My -KeyUsage DigitalSignature `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3') -NotAfter (Get-Date).AddYears(3)
+    }
+    Export-Certificate -Cert $cert -FilePath $certFile -Force | Out-Null
+    Write-Host "Test cert exported: $certFile (thumbprint $($cert.Thumbprint))"
+    $signArgs = @('sign', '/v', '/fd', 'SHA256', '/sha1', $cert.Thumbprint)
+}
 
 # 3) Catalog + sign the package (each tool resolved independently -- they need
 #    not share a bin).
@@ -117,8 +141,7 @@ Write-Host "== inf2cat =="
 & $inf2cat "/driver:$outDir" /os:10_X64 /verbose
 
 Write-Host "== signtool (sys + cat) =="
-& $signtool sign /v /fd SHA256 /sha1 $cert.Thumbprint `
-    (Join-Path $outDir 'PodBridgeAAP.sys') (Join-Path $outDir 'PodBridgeAAP.cat')
+& $signtool @signArgs (Join-Path $outDir 'PodBridgeAAP.sys') (Join-Path $outDir 'PodBridgeAAP.cat')
 
 Write-Host ''
 Write-Host 'Test-signed package ready in:' $outDir

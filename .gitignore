@@ -33,6 +33,9 @@ Desktop.ini
 # Driver build output (Tier 2)
 driver/**/x64/
 driver/**/*.cer
+# ...but DO track the stable PUBLIC test cert shipped with the driver release
+# (public key only; matches the DRIVER_SIGNING_PFX_* signing secret).
+!driver/PodBridgeAAP/PodBridgeTest.cer
 
 # Local launch/marketing drafts — kept private, never published
 launch/

@@ -29,8 +29,9 @@ A kernel driver on 64-bit Windows must be **signed and trusted** to load. A
 Microsoft-signed release would need an **EV code-signing certificate**
 (~$250–560/year) and a **Microsoft Partner Center** account — a paid, human
 prerequisite. PodBridge is a free, open-source project, so this tier ships
-**TEST-signed** with a **self-signed certificate you generate locally** (no
-purchase, no account).
+**TEST-signed** with a **self-signed certificate** (no purchase, no account) —
+either the project's stable test certificate in the **pre-built release**, or one
+you generate locally if you build the driver yourself.
 
 > **PodBridge makes no claim of a Microsoft-signed or production-attested
 > driver.** The attestation path (EV certificate + Partner Center) is documented
@@ -82,10 +83,34 @@ You can start this from inside PodBridge (tray → **Noise control** → **Enabl
 advanced tier…**), which shows the same warning and then launches the elevated
 installer for you. Or do it by hand:
 
-### 1. Build (and test-sign) the driver
+### 1. Get the driver package
 
-From the repository, in a normal shell (needs Visual Studio with the **Desktop
-development with C++** workload + the **Windows Driver Kit** component; the WDK is
+**Option A — download the pre-built release (recommended).** The driver is
+published as its **own** GitHub release, separate from the app. On the
+[**Releases page**](https://github.com/bhemsen/PodBridge/releases) pick the latest
+**`driver-v…`** release and download `PodBridgeAAP-driver-<version>-x64.zip`.
+
+The package is **test-signed with the project's stable test certificate** and its
+build provenance is attested. Verify your download before trusting it:
+
+```powershell
+gh attestation verify PodBridgeAAP-driver-<version>-x64.zip --repo bhemsen/PodBridge
+# and/or check it against the release's checksums.sha256
+```
+
+Extract the zip. It contains, side by side: `install-advanced-tier.ps1`,
+`PodBridgeAAP.inf`, `PodBridgeAAP.sys`, `PodBridgeAAP.cat`, and the public
+`PodBridgeTest.cer`.
+
+- To use the in-app **Enable advanced tier…** button to run the installer for you,
+  extract into `%LocalAppData%\PodBridge\advanced-tier\` (the app looks there, and
+  in `PODBRIDGE_ADVANCED_TIER_DIR` and next to the app).
+- Otherwise just run the installer from wherever you extracted it (step 2), or pass
+  `-PackageDir <extracted-folder>`.
+
+**Option B — build (and test-sign) it yourself.** From the repository, in a normal
+shell (needs Visual Studio, or the **Build Tools**, with the **Desktop development
+with C++** workload + the **Windows Driver Kit** component; the WDK build files are
 restored from NuGet):
 
 ```powershell
@@ -93,13 +118,10 @@ cd driver/PodBridgeAAP
 .\build-testsign.ps1
 ```
 
-This produces a test-signed package (`PodBridgeAAP.sys` / `.inf` / `.cat`) and the
-self-signed certificate `PodBridgeTest.cer` under `driver/PodBridgeAAP/x64/Release`.
-It does **not** install anything or change any security setting.
-
-> Prefer not to build? A future release may attach a pre-built test-signed
-> package to GitHub Releases; extract it and point the installer at it with
-> `-PackageDir <folder>` (or set `PODBRIDGE_ADVANCED_TIER_DIR`).
+This produces a test-signed package (`PodBridgeAAP.sys` / `.inf` / `.cat`) and a
+locally-generated self-signed `PodBridgeTest.cer` under
+`driver/PodBridgeAAP/x64/Release`. It does **not** install anything or change any
+security setting.
 
 ### 2. Run the install step (elevated; installs the driver + trusts the cert)
 

@@ -196,6 +196,29 @@ project's flow.
   `docs/release-notes/<version>.md` fragment, and the published GitHub Release
   with its assets. GitHub-only durable state — no local release-state file
   (`docs/constitution.md`).
+
+## Advanced-tier driver release (separate stream)
+
+The optional Tier-2 KMDF driver is published as its **own** GitHub Release,
+independent of the app above. It is **never** bundled in the app (constitution).
+
+- **Tag scheme:** `driver-vMAJOR.MINOR.PATCH` (mirrors the `.inf` `DriverVer`),
+  deliberately **namespaced away from the app's `v*`** so it never triggers
+  `release.yml`. The tag push is the publish trigger.
+- **Workflow:** `.github/workflows/driver-release.yml` (tag push publishes;
+  `workflow_dispatch` is a build-only dry run). It builds the driver headlessly
+  (NuGet WDK), **test-signs** it with the project's **stable** self-signed cert
+  (private key in the `DRIVER_SIGNING_PFX_BASE64` / `DRIVER_SIGNING_PFX_PASSWORD`
+  repo secrets; public cert committed at `driver/PodBridgeAAP/PodBridgeTest.cer`
+  and shipped in the package), zips the flat installable package
+  (`install-advanced-tier.ps1` + `.inf`/`.sys`/`.cat`/`.cer`), writes
+  `checksums.sha256`, attests build provenance, and runs `gh release create`
+  **inside CI** — same don't-`gh release create`-in-session discipline as the app.
+- **Honesty (unchanged):** still a **TEST-signed** driver, **not** Microsoft-signed;
+  loading it needs test-signing mode + trusting the cert (see
+  `docs/user/advanced-tier.md`). Attestation/EV signing stays deferred.
+- **Cut a driver release:** `git tag driver-vX.Y.Z && git push origin driver-vX.Y.Z`
+  (bump the `.inf` `DriverVer` to match first).
 - An external-tool URL / dashboard is **not** the release.
 
 ## Do's and Don'ts
