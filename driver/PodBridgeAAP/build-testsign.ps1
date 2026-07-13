@@ -53,27 +53,30 @@ $certFile = Join-Path $outDir 'PodBridgeTest.cer'
 function Find-MSBuild {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (-not (Test-Path $vswhere)) { throw 'vswhere.exe not found; install Visual Studio with the C++ workload.' }
-    $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' |
+    $msbuild = & $vswhere -products '*' -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' |
         Select-Object -First 1
     if (-not $msbuild) { throw 'MSBuild.exe not found.' }
     return $msbuild
 }
 
-function Find-WdkBin {
-    if ($WdkBin) { return $WdkBin }
+# Locate a single WDK/SDK tool by name. inf2cat.exe and signtool.exe do NOT
+# always live in the same bin (a NuGet WDK ships inf2cat under x86 while signtool
+# comes from an installed SDK bin), so resolve each tool independently rather than
+# assuming one shared directory. Prefer an x64 copy, else take any. -WdkBin, when
+# given and holding the tool, wins.
+function Find-WdkTool([string]$tool) {
+    if ($WdkBin -and (Test-Path (Join-Path $WdkBin $tool))) { return (Join-Path $WdkBin $tool) }
+    $roots = @()
     $nuget = Join-Path $env:USERPROFILE '.nuget\packages\microsoft.windows.wdk.x64'
-    if (Test-Path $nuget) {
-        $tool = Get-ChildItem -Path $nuget -Recurse -Filter 'signtool.exe' -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
-        if ($tool) { return $tool.DirectoryName }
-    }
+    if (Test-Path $nuget) { $roots += $nuget }
     $installed = 'C:\Program Files (x86)\Windows Kits\10\bin'
-    if (Test-Path $installed) {
-        $tool = Get-ChildItem -Path $installed -Recurse -Filter 'signtool.exe' -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
-        if ($tool) { return $tool.DirectoryName }
+    if (Test-Path $installed) { $roots += $installed }
+    foreach ($root in $roots) {
+        $found = Get-ChildItem -Path $root -Recurse -Filter $tool -ErrorAction SilentlyContinue |
+            Sort-Object { $_.FullName -notmatch '\\x64\\' } | Select-Object -First 1
+        if ($found) { return $found.FullName }
     }
-    throw 'Could not locate the WDK tools bin (inf2cat.exe / signtool.exe). Pass -WdkBin.'
+    throw "Could not locate $tool (WDK/SDK bin). Pass -WdkBin or install the WDK."
 }
 
 # 1) Build the driver (headless, via the NuGet WDK).
@@ -81,7 +84,12 @@ $msbuild = Find-MSBuild
 Write-Host "== restore =="
 & $msbuild $project /t:restore /p:Configuration=$Configuration /p:Platform=x64
 Write-Host "== build =="
-& $msbuild $project /p:Configuration=$Configuration /p:Platform=x64
+# ResolveNuGetPackages=false: the legacy Microsoft.NuGet.targets asset resolver
+# (guarded only by ResolveNuGetPackages + a present lock file, not by project
+# style) otherwise runs for this native PackageReference project and fails with
+# "no compatible framework" on the native-only assets file. The WDK NuGet needs
+# no managed-asset resolution, so turn it off.
+& $msbuild $project /p:Configuration=$Configuration /p:Platform=x64 /p:ResolveNuGetPackages=false
 if (-not (Test-Path (Join-Path $outDir 'PodBridgeAAP.sys'))) {
     throw "Build did not produce PodBridgeAAP.sys in $outDir"
 }
@@ -100,10 +108,10 @@ if (-not $cert) {
 Export-Certificate -Cert $cert -FilePath $certFile -Force | Out-Null
 Write-Host "Test cert exported: $certFile (thumbprint $($cert.Thumbprint))"
 
-# 3) Catalog + sign the package.
-$wdk = Find-WdkBin
-$inf2cat = Join-Path $wdk 'inf2cat.exe'
-$signtool = Join-Path $wdk 'signtool.exe'
+# 3) Catalog + sign the package (each tool resolved independently -- they need
+#    not share a bin).
+$inf2cat = Find-WdkTool 'inf2cat.exe'
+$signtool = Find-WdkTool 'signtool.exe'
 
 Write-Host "== inf2cat =="
 & $inf2cat "/driver:$outDir" /os:10_X64 /verbose

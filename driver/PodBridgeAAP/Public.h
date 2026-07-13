@@ -29,14 +29,16 @@ DEFINE_GUID(GUID_DEVINTERFACE_PODBRIDGE_AAP,
     0xa5fd3d2b, 0x12a0, 0x40af, 0xae, 0x19, 0xef, 0x11, 0x0c, 0x48, 0x8d, 0xff);
 
 //
-// PodBridge AAP Bluetooth service GUID. BthEnum expands the service GUID a
-// remote device advertises into a hardware id of the form
-// BTHENUM\{ServiceGUID}; the INF [Models] section binds to that id (research
-// #40 (c)). This is a custom PodBridge service GUID (not a SIG 16-bit value).
+// Apple AAP Bluetooth service UUID. BthEnum expands a service UUID that the
+// remote device advertises into a hardware id of the form BTHENUM\{ServiceGUID};
+// the INF [Models] section binds to that id (research #40 (c)). This MUST be a
+// UUID the AirPods actually advertise -- an invented GUID matches no PDO and the
+// driver never binds. Observed on the paired AirPods Pro 2 (Windows enumerates a
+// BTHENUM node for this UUID) as the Apple AAP L2CAP (PSM 0x1001) service.
 //
-// {36F88597-6BAE-4E3D-A454-66C3D877F4EA}
+// {74EC2172-0BAD-4D01-8F77-997B2BE0722A}
 DEFINE_GUID(GUID_PODBRIDGE_AAP_SERVICE,
-    0x36f88597, 0x6bae, 0x4e3d, 0xa4, 0x54, 0x66, 0xc3, 0xd8, 0x77, 0xf4, 0xea);
+    0x74ec2172, 0x0bad, 0x4d01, 0x8f, 0x77, 0x99, 0x7b, 0x2b, 0xe0, 0x72, 0x2a);
 
 //
 // AAP control-channel PSM. Documented fact (research #40 / prior-art): the AAP
