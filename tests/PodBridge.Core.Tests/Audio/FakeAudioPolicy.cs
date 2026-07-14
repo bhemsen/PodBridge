@@ -26,10 +26,20 @@ internal sealed class FakeAudioPolicy : IAudioPolicy
     /// </summary>
     public string? FailOnceOnEndpointId { get; set; }
 
+    /// <summary>
+    /// When set, EVERY <see cref="SetDefaultEndpoint"/> for this endpoint id throws and
+    /// <b>never clears</b> — simulates a PERSISTENT (non-transient) mid-apply failure,
+    /// as opposed to <see cref="FailOnceOnEndpointId"/>'s one-shot failure, so a test can
+    /// assert the rollback path converges instead of ping-ponging apply&lt;-&gt;rollback
+    /// forever (#114).
+    /// </summary>
+    public string? FailAlwaysOnEndpointId { get; set; }
+
     /// <summary>Adds an endpoint (friendly name = id for readability) and returns it.</summary>
-    public AudioEndpoint Add(string id, AudioEndpointDirection direction, bool isAirPods)
+    public AudioEndpoint Add(
+        string id, AudioEndpointDirection direction, bool isAirPods, bool isHandsFreeRender = false)
     {
-        var endpoint = new AudioEndpoint(id, direction, isAirPods, id);
+        var endpoint = new AudioEndpoint(id, direction, isAirPods, id, isHandsFreeRender);
         _endpoints.Add(endpoint);
         return endpoint;
     }
@@ -56,6 +66,11 @@ internal sealed class FakeAudioPolicy : IAudioPolicy
         {
             FailOnceOnEndpointId = null;
             throw new InvalidOperationException($"simulated endpoint-set failure for '{endpointId}'");
+        }
+
+        if (FailAlwaysOnEndpointId == endpointId)
+        {
+            throw new InvalidOperationException($"simulated PERSISTENT endpoint-set failure for '{endpointId}'");
         }
 
         var direction = _endpoints.Single(e => e.Id == endpointId).Direction;

@@ -318,22 +318,41 @@ public sealed class MicPolicyEngine : IDisposable
         {
             if (available.Any(e => e.Id == id && e.Direction == key.Direction))
             {
-                TrySetDefault(id, key.Role);
+                TrySetDefaultIfChanged(id, key.Role, key.Direction);
             }
         }
     }
 
-    // A soft, never-throwing endpoint-set used by the restore path so rolling back can
-    // never itself crash the tray if a further set fails.
-    private void TrySetDefault(string endpointId, AudioRole role)
+    // A soft, never-throwing, IDEMPOTENT endpoint-set used by the restore path: skips a
+    // set when the role already holds the target endpoint — the rollback-path
+    // counterpart of SetDefaultIfChanged below (#113 made the apply path idempotent;
+    // this closes the matching gap on the rollback path, #114). Without this, a
+    // PERSISTENT (non-transient) mid-apply failure can ping-pong apply<->rollback
+    // forever: apply moves a role toward the AirPods, a set fails, rollback
+    // unconditionally re-sets EVERY baseline role — including ones the failed attempt
+    // never actually touched — each re-set can re-trigger the OS default-changed
+    // notification, which re-enters ApplyLocked, fails again, and rolls back again,
+    // re-initialising the A2DP render stream on every cycle. Skipping already-satisfied
+    // sets converges the rollback to a fixed point instead. Best-effort: a failing set
+    // is still swallowed (graceful degradation).
+    private void TrySetDefaultIfChanged(string endpointId, AudioRole role, AudioEndpointDirection direction)
     {
         try
         {
+            // The idempotence read is inside the try so the rollback path can NEVER throw,
+            // unconditionally (not merely because the current adapter's GetDefaultEndpoint
+            // happens to swallow its own errors): a throwing get degrades to "not satisfied",
+            // falling through to the equally best-effort set below.
+            if (_audioPolicy.GetDefaultEndpoint(role, direction) == endpointId)
+            {
+                return;
+            }
+
             _audioPolicy.SetDefaultEndpoint(endpointId, role);
         }
         catch (Exception)
         {
-            // Best-effort restore: a failing set is swallowed (graceful degradation).
+            // Best-effort restore: a failing get/set is swallowed (graceful degradation).
         }
     }
 
@@ -396,9 +415,20 @@ public sealed class MicPolicyEngine : IDisposable
         }
     }
 
+    // Real AirPods can expose TWO IsAirPods render endpoints at once — the stereo A2DP
+    // ("Headphones") and the mono Hands-Free/HFP ("Headset") — sharing one container
+    // id, so picking the plain FirstOrDefault is enumeration-order-dependent and can
+    // land the media role on the mono endpoint. Prefer the endpoint whose adapter-
+    // supplied IsHandsFreeRender is false (A2DP, or a capture endpoint / an adapter
+    // that cannot distinguish the two), then break any remaining tie by endpoint id
+    // (ordinal) so the pick is stable and independent of enumeration order (#114).
     private static AudioEndpoint? FindAirPods(
         IReadOnlyList<AudioEndpoint> endpoints, AudioEndpointDirection direction)
-        => endpoints.FirstOrDefault(e => e.Direction == direction && e.IsAirPods);
+        => endpoints
+            .Where(e => e.Direction == direction && e.IsAirPods)
+            .OrderBy(e => e.IsHandsFreeRender)
+            .ThenBy(e => e.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
 
     // Fallback = the current non-AirPods default-communications endpoint for this
     // direction, else the first available non-AirPods endpoint (spec prior decision).

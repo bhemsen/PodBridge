@@ -123,6 +123,66 @@ public class MicPolicyEngineTests
         Assert.Equal(MicCapture, policy.DefaultId(AudioEndpointDirection.Capture, AudioRole.Communications));
     }
 
+    // ---- Deterministic A2DP-render selection (#114) -----------------------------
+
+    [Fact]
+    public void MediaRole_PrefersA2dpRenderOverHandsFree_OrderIndependent_NeverBindsHfp()
+    {
+        // Two AirPods render endpoints (A2DP "Headphones" + HFP "Headset") share one
+        // container id, so both are IsAirPods=true. Build the SAME topology in both
+        // enumeration orders and assert the media role always lands on the A2DP one.
+        var hfpEnumeratedFirst = TwoRenderProfilePolicy(handsFreeFirst: true);
+        using var engineHfpFirst = NewEngine(hfpEnumeratedFirst, new FakeAudioSessionMonitor());
+        Assert.Equal(
+            A2dpRenderId,
+            hfpEnumeratedFirst.DefaultId(AudioEndpointDirection.Render, AudioRole.Multimedia));
+
+        var a2dpEnumeratedFirst = TwoRenderProfilePolicy(handsFreeFirst: false);
+        using var engineA2dpFirst = NewEngine(a2dpEnumeratedFirst, new FakeAudioSessionMonitor());
+        Assert.Equal(
+            A2dpRenderId,
+            a2dpEnumeratedFirst.DefaultId(AudioEndpointDirection.Render, AudioRole.Multimedia));
+
+        // Media never binds the mono HFP endpoint in either enumeration order.
+        Assert.NotEqual(
+            HfpRenderId,
+            hfpEnumeratedFirst.DefaultId(AudioEndpointDirection.Render, AudioRole.Multimedia));
+        Assert.NotEqual(
+            HfpRenderId,
+            a2dpEnumeratedFirst.DefaultId(AudioEndpointDirection.Render, AudioRole.Multimedia));
+    }
+
+    // The HFP id deliberately sorts BEFORE the A2DP id (ordinal): if the media pick fell
+    // back to the id tie-break alone (ThenBy(Id)), HFP would win — so the assertions above
+    // can only pass because OrderBy(IsHandsFreeRender) puts the A2DP endpoint first. This
+    // makes the flag — the load-bearing mechanism on real hardware, where endpoint ids are
+    // effectively random GUIDs — the thing actually under test, not the id ordering.
+    private const string HfpRenderId = "ap-render-1-hfp";
+    private const string A2dpRenderId = "ap-render-2-a2dp";
+
+    // AirPods A2DP render + AirPods HFP render (sharing a container id, modelled here
+    // simply as both isAirPods: true) + a non-AirPods fallback, in the requested
+    // enumeration order, so the test can prove the pick is order-independent.
+    private static FakeAudioPolicy TwoRenderProfilePolicy(bool handsFreeFirst)
+    {
+        var policy = new FakeAudioPolicy();
+        if (handsFreeFirst)
+        {
+            policy.Add(HfpRenderId, AudioEndpointDirection.Render, isAirPods: true, isHandsFreeRender: true);
+            policy.Add(A2dpRenderId, AudioEndpointDirection.Render, isAirPods: true, isHandsFreeRender: false);
+        }
+        else
+        {
+            policy.Add(A2dpRenderId, AudioEndpointDirection.Render, isAirPods: true, isHandsFreeRender: false);
+            policy.Add(HfpRenderId, AudioEndpointDirection.Render, isAirPods: true, isHandsFreeRender: true);
+        }
+
+        policy.Add(ApCapture, AudioEndpointDirection.Capture, isAirPods: true);
+        policy.Add(SpkRender, AudioEndpointDirection.Render, isAirPods: false);
+        policy.Add(MicCapture, AudioEndpointDirection.Capture, isAirPods: false);
+        return policy;
+    }
+
     // ---- Fallback selection ----------------------------------------------------
 
     [Fact]
