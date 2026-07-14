@@ -93,13 +93,18 @@ jobs:
           $zip = Join-Path $assets "PodBridgeAAP-driver-$v-x64.zip"
           Compress-Archive -Path (Join-Path $pkg '*') -DestinationPath $zip -Force
           Copy-Item 'driver/PodBridgeAAP/PodBridgeTest.cer' $assets -Force
-          # checksums.sha256 over the published assets (lowercase hash *name).
-          Push-Location $assets
-          Get-ChildItem -File -Exclude 'checksums.sha256' | ForEach-Object {
-            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
-            "$h *$($_.Name)"
-          } | Set-Content -Encoding ascii 'checksums.sha256'
-          Pop-Location
+          # checksums.sha256 over the published assets (lowercase "hash *name").
+          # Absolute path + explicit write (no Push-Location / relative Set-Content,
+          # which did not land the file in $assets on the runner).
+          $csPath = Join-Path $assets 'checksums.sha256'
+          $lines = @()
+          foreach ($f in Get-ChildItem -Path $assets -File) {
+            if ($f.Name -eq 'checksums.sha256') { continue }
+            $h = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+            $lines += "$h *$($f.Name)"
+          }
+          [IO.File]::WriteAllText($csPath, ($lines -join "`n") + "`n")
+          if (-not (Test-Path $csPath)) { throw 'checksums.sha256 was not created' }
           "assets=$assets" >> $env:GITHUB_OUTPUT
           "zip=$zip" >> $env:GITHUB_OUTPUT
           Get-ChildItem $assets | Select-Object Name, Length | Format-Table -AutoSize
