@@ -325,6 +325,20 @@ local-only.
   [the microphone trade-off](#the-microphone-trade-off-a2dphfp)). Use `HiFi-lock`
   to keep calls off the AirPods, or `Auto-switch` to restore hi-fi automatically
   when the call ends.
+- **All audio devices disappear and no microphone works (typically after long
+  sleep, then joining a call)** — if *every* audio output and input vanishes and
+  microphones capture nothing — usually after the PC has been in sleep/hibernate
+  for a long time (a day or more) and often triggered by starting a call (e.g.
+  Teams) while several apps are already playing sound — this is a **Windows
+  audio-stack failure, not a PodBridge bug**. The give-away is that it also takes
+  down **wired outputs like line-out that PodBridge never touches**: PodBridge can
+  only change *which* device is the default, it has no way to remove a device from
+  Windows at all. The root cause is the Windows Audio / Audio Endpoint Builder
+  service failing to re-enumerate devices after a long resume. To recover, restart
+  the **Windows Audio** service (`services.msc` → *Windows Audio* → Restart) or
+  reboot; reconnecting the AirPods often brings *them* back but does not restore
+  the other endpoints. If it keeps happening, doing a full **shutdown** rather than
+  sleep between long idle periods avoids the resume path that triggers it.
 
 ---
 
