@@ -20,12 +20,12 @@ flowchart TB
     end
 
     subgraph Core["PodBridge.Core — platform-neutral domain (no OS, no P/Invoke)"]
-        Domain["Domain logic: AapProtocol · ContinuityParser · DeviceStateTracker · AutoPlayPauseEngine · MicPolicyEngine · AudioGuidanceEngine · ModelRegistry · CapabilityProvider · Diagnostics"]
+        Domain["Domain logic: AapProtocol · ContinuityParser · DeviceStateTracker · AutoPlayPauseEngine · MicPolicyEngine · AudioGuidanceEngine · ModelRegistry · CapabilityProvider · Diagnostics · NoiseControlController · GestureSettingsController / GestureRepushController"]
         Ifaces["OS-boundary interfaces (abstractions)"]
     end
 
     subgraph Win["PodBridge.Windows — OS adapters (WinRT + P/Invoke, no UI)"]
-        Adapters["WinRtBleScanner · WinRtConnectionMonitor · WinRtBluetoothRadioSource · WindowsMediaController · WindowsAudioStateReader · WindowsAudioPolicy · WindowsAudioSessionMonitor · RunKeyStartupToggle · DiagnosticsExporter"]
+        Adapters["WinRtBleScanner · WinRtConnectionMonitor · WinRtBluetoothRadioSource · WindowsMediaController · WindowsAudioStateReader · WindowsAudioPolicy · WindowsAudioSessionMonitor · RunKeyStartupToggle · DiagnosticsExporter · RollingFileLoggerProvider"]
         T2Adapters["Tier 2: DriverAapTransport · AdvancedTierInstaller"]
     end
 
