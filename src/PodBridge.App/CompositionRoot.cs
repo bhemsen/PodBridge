@@ -82,6 +82,13 @@ public static class CompositionRoot
         // its mode + Call-mode toggle and reflects the single-device degrade warning.
         services.AddSingleton<MicPolicyEngine>();
 
+        // Issue #173: Windows audio-stack-collapse detection. A singleton subscribing to
+        // the same IAudioEndpointChangeMonitor for the app's lifetime (disposed by the
+        // container on shutdown), so it and MicPolicyEngine each see every topology change
+        // independently. Core logic only — the OS signal comes from the Windows adapter,
+        // the tray notification + recovery window are TrayAudioCollapseController's job.
+        services.AddSingleton<AudioCollapseDetector>();
+
         // Phase 6 Tier-2 noise-control state machine (issue #44). Core logic driving the
         // opt-in IAapTransport with the optimistic-set / echo-confirm / timeout-revert
         // model; the tray (TrayNoiseControlController) is its only consumer. A singleton

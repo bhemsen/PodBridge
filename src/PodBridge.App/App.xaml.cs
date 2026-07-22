@@ -29,12 +29,14 @@ public partial class App : Application
     private TrayIcon? _trayIcon;
     private AboutWindow? _aboutWindow;
     private GestureSettingsWindow? _gestureSettingsWindow;
+    private AudioRecoveryWindow? _audioRecoveryWindow;
     private TrayStatusController? _trayStatusController;
     private TrayBatteryController? _trayBatteryController;
     private TrayAudioController? _trayAudioController;
     private TrayMicController? _trayMicController;
     private TrayNoiseControlController? _trayNoiseControlController;
     private TrayDiagnosticsController? _trayDiagnosticsController;
+    private TrayAudioCollapseController? _trayAudioCollapseController;
     private IBleScanner? _bleScanner;
     private BleScannerSupervisor? _bleScannerSupervisor;
     private IBluetoothRadioSource? _radioSource;
@@ -62,6 +64,7 @@ public partial class App : Application
         _trayIcon = TrayIcon.Create();
         _trayIcon.SetAboutHandler(ShowAboutWindow);
         _trayIcon.SetGestureSettingsHandler(ShowGestureSettingsWindow);
+        _trayIcon.SetAudioRecoveryHandler(ShowAudioRecoveryWindow);
 
         var monitor = _host.Services.GetRequiredService<IConnectionMonitor>();
 
@@ -158,6 +161,15 @@ public partial class App : Application
         _trayMicController = TrayMicController.Create(
             _trayIcon!, engine, new MicPolicyModeStore(), Dispatcher);
         _trayMicController.Start();
+
+        // Issue #173: resolve the collapse detector and wire its tray notification
+        // BEFORE the endpoint-change monitor starts, so no early topology change is
+        // missed (mirrors the engine ordering above; both subscribe to the same
+        // singleton monitor independently).
+        var collapseDetector = services.GetRequiredService<AudioCollapseDetector>();
+        _trayAudioCollapseController = TrayAudioCollapseController.Create(
+            _trayIcon!, collapseDetector, Dispatcher);
+        _trayAudioCollapseController.Start();
 
         _audioSessionMonitor = services.GetRequiredService<IAudioSessionMonitor>();
         _audioSessionMonitor.Start();
@@ -275,6 +287,24 @@ public partial class App : Application
         _gestureSettingsWindow.Show();
     }
 
+    // Opens the audio-collapse recovery guide (issue #173) from the tray notification
+    // click or the "Audio recovery guide…" entry. A single instance is reused, mirroring
+    // the About/Gesture windows; closing it never exits the tray-resident app
+    // (ShutdownMode is OnExplicitShutdown). Purely static, honest copy — no live state to
+    // bind, unlike the Gesture window.
+    private void ShowAudioRecoveryWindow()
+    {
+        if (_audioRecoveryWindow is not null)
+        {
+            _audioRecoveryWindow.Activate();
+            return;
+        }
+
+        _audioRecoveryWindow = new AudioRecoveryWindow();
+        _audioRecoveryWindow.Closed += (_, _) => _audioRecoveryWindow = null;
+        _audioRecoveryWindow.Show();
+    }
+
     // Opens the About window (the app's first non-tray window) from the tray "About"
     // entry. A single instance is reused: if it is already open, bring it to the
     // front rather than stacking duplicates. Runs on the UI dispatcher (the tray
@@ -324,6 +354,11 @@ public partial class App : Application
         // dropping the reference is enough; the container disposes its resolved services.
         _trayDiagnosticsController = null;
 
+        // Unsubscribe the audio-collapse controller before its detector (a container
+        // singleton) is disposed, so no late CollapseDetected touches a disposed tray.
+        _trayAudioCollapseController?.Dispose();
+        _trayAudioCollapseController = null;
+
         // Stop the radio source first so no radio transition drives a restart during
         // teardown, then dispose the supervisor (unsubscribing it) and stop scanning so no
         // advertisement drives the pipeline. The container still disposes the scanner,
@@ -362,6 +397,11 @@ public partial class App : Application
         // on close), so no open window keeps the process alive after an explicit shutdown.
         _gestureSettingsWindow?.Close();
         _gestureSettingsWindow = null;
+
+        // Close the audio-recovery window too, so no open window keeps the process alive
+        // after an explicit shutdown.
+        _audioRecoveryWindow?.Close();
+        _audioRecoveryWindow = null;
 
         _trayIcon?.Dispose();
         _trayIcon = null;
