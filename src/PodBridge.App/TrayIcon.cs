@@ -80,6 +80,12 @@ public sealed class TrayIcon : IDisposable
     private Action? _exportDiagnosticsHandler;
     private Action<bool>? _debugLoggingHandler;
     private Action? _aboutHandler;
+    private Action? _audioRecoveryHandler;
+
+    // Tracks whether the currently-shown balloon is the collapse notification, so a
+    // click on it (and only it) opens the recovery window — other notifications
+    // (first-run pairing, SBC advice, diagnostics export) must not open it.
+    private bool _lastNotificationOpensRecovery;
 
     private TrayIcon()
     {
@@ -113,6 +119,7 @@ public sealed class TrayIcon : IDisposable
                 new Uri("pack://application:,,,/Assets/tray.ico", UriKind.Absolute)),
             ContextMenu = BuildContextMenu(),
         };
+        _icon.TrayBalloonTipClicked += OnBalloonTipClicked;
         _icon.ForceCreate();
     }
 
@@ -168,6 +175,13 @@ public sealed class TrayIcon : IDisposable
     /// About window). Call on the UI thread.
     /// </summary>
     public void SetAboutHandler(Action handler) => _aboutHandler = handler;
+
+    /// <summary>
+    /// Wires the callback invoked by the "Audio recovery guide…" menu action AND by
+    /// clicking the audio-collapse notification (opens the <c>AudioRecoveryWindow</c>,
+    /// issue #173). Call on the UI thread.
+    /// </summary>
+    public void SetAudioRecoveryHandler(Action handler) => _audioRecoveryHandler = handler;
 
     /// <summary>
     /// Wires the diagnostics/logging menu actions: <paramref name="onExport"/> fires for
@@ -305,10 +319,28 @@ public sealed class TrayIcon : IDisposable
     /// on the UI thread.
     /// </summary>
     public void ShowNotification(string title, string message)
-        => _icon.ShowNotification(title, message, NotificationIcon.Info);
+    {
+        _lastNotificationOpensRecovery = false;
+        _icon.ShowNotification(title, message, NotificationIcon.Info);
+    }
+
+    /// <summary>
+    /// Shows the once-per-episode audio-collapse notification (issue #173). Clicking
+    /// THIS notification — and only this one — opens the recovery window via the
+    /// handler wired with <see cref="SetAudioRecoveryHandler"/>. Call on the UI thread.
+    /// </summary>
+    public void ShowAudioCollapseNotification(string title, string message)
+    {
+        _lastNotificationOpensRecovery = true;
+        _icon.ShowNotification(title, message, NotificationIcon.Warning);
+    }
 
     /// <summary>Removes the icon from the notification area.</summary>
-    public void Dispose() => _icon.Dispose();
+    public void Dispose()
+    {
+        _icon.TrayBalloonTipClicked -= OnBalloonTipClicked;
+        _icon.Dispose();
+    }
 
     // Tooltip carries both the connection status and the battery line so the two
     // controllers can update independently without clobbering each other.
@@ -332,6 +364,7 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(CreateItem("Open Bluetooth settings", OnOpenBluetoothSettings));
         menu.Items.Add(new Separator());
         menu.Items.Add(CreateItem("Gesture controls…", OnGestureSettings));
+        menu.Items.Add(CreateItem("Audio recovery guide…", OnAudioRecovery));
         menu.Items.Add(CreateItem("Export diagnostics", OnExportDiagnostics));
         menu.Items.Add(_debugLoggingItem);
         menu.Items.Add(CreateItem("About PodBridge", OnAbout));
@@ -423,6 +456,20 @@ public sealed class TrayIcon : IDisposable
 
     private void OnGestureSettings(object sender, RoutedEventArgs e)
         => _gestureSettingsHandler?.Invoke();
+
+    private void OnAudioRecovery(object sender, RoutedEventArgs e)
+        => _audioRecoveryHandler?.Invoke();
+
+    // Only the audio-collapse notification sets _lastNotificationOpensRecovery, so a
+    // click on any other notification (first-run pairing, SBC advice, diagnostics
+    // export) never opens the recovery window.
+    private void OnBalloonTipClicked(object sender, RoutedEventArgs e)
+    {
+        if (_lastNotificationOpensRecovery)
+        {
+            _audioRecoveryHandler?.Invoke();
+        }
+    }
 
     private void OnExportDiagnostics(object sender, RoutedEventArgs e)
         => _exportDiagnosticsHandler?.Invoke();
