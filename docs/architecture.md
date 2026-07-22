@@ -3,6 +3,10 @@
 > Structural, living document — the most volatile artifact. Update whenever a
 > change alters components, boundaries, or flows. Greenfield seed, not a final
 > design.
+>
+> Visual companion: [`architecture-diagrams.md`](architecture-diagrams.md) —
+> Mermaid component map, interface boundaries, key-flow sequences, and the
+> noise-control state machine (keep in sync with this document).
 
 ## Component map
 
