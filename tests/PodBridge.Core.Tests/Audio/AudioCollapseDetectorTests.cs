@@ -6,9 +6,10 @@ namespace PodBridge.Core.Tests.Audio;
 
 /// <summary>
 /// Device-independent tests (constitution Tier-1 gate) for
-/// <see cref="AudioCollapseDetector"/>: the collapse threshold, the debounce that
-/// coalesces a burst of topology-change events, that normal transitions never
-/// false-trigger, and the edge-triggered once-per-episode + re-arm behaviour (issue #173).
+/// <see cref="AudioCollapseDetector"/>: the collapse threshold (including the
+/// AirPods-only false-positive guard), the debounce that coalesces a burst of
+/// topology-change events, that normal transitions never false-trigger, and the
+/// edge-triggered once-per-episode + re-arm behaviour (issue #173).
 /// </summary>
 public class AudioCollapseDetectorTests
 {
@@ -20,6 +21,9 @@ public class AudioCollapseDetectorTests
         var (policy, monitor, time, detector, raised) = CreateSut();
         policy.Add("speakers", AudioEndpointDirection.Render, isAirPods: false);
         policy.Add("mic", AudioEndpointDirection.Capture, isAirPods: false);
+        monitor.RaiseEndpointsChanged(); // let the detector observe the pre-collapse mix
+        time.Advance(Debounce);
+        Assert.Empty(raised);
 
         policy.Remove("speakers");
         policy.Remove("mic");
@@ -83,10 +87,35 @@ public class AudioCollapseDetectorTests
     }
 
     [Fact]
+    public void AirPodsOnlyMachine_AirPodsDisconnect_NeverTriggers()
+    {
+        // A machine whose ONLY audio device is the AirPods (e.g. no onboard audio).
+        var (policy, monitor, time, _, raised) = CreateSut();
+        var airPodsRender = policy.Add("airpods-render", AudioEndpointDirection.Render, isAirPods: true);
+        var airPodsCapture = policy.Add("airpods-capture", AudioEndpointDirection.Capture, isAirPods: true);
+        monitor.RaiseEndpointsChanged(); // let the detector observe the AirPods-only mix
+        time.Advance(Debounce);
+        Assert.Empty(raised);
+
+        // An ordinary AirPods disconnect also drops the count to zero here, but no
+        // non-AirPods device vanished — this must NOT read as a Windows-level collapse.
+        policy.Remove(airPodsRender.Id);
+        policy.Remove(airPodsCapture.Id);
+        monitor.RaiseEndpointsChanged();
+        time.Advance(Debounce);
+
+        Assert.Empty(raised);
+    }
+
+    [Fact]
     public void BurstOfEvents_CoalescesIntoOneEvaluation()
     {
         var (policy, monitor, time, _, raised) = CreateSut();
         policy.Add("speakers", AudioEndpointDirection.Render, isAirPods: false);
+        monitor.RaiseEndpointsChanged(); // let the detector observe the pre-collapse mix
+        time.Advance(Debounce);
+        Assert.Empty(raised);
+
         policy.Remove("speakers");
 
         // A storm of change notifications for the same underlying transition.
@@ -109,6 +138,10 @@ public class AudioCollapseDetectorTests
     {
         var (policy, monitor, time, _, raised) = CreateSut();
         policy.Add("speakers", AudioEndpointDirection.Render, isAirPods: false);
+        monitor.RaiseEndpointsChanged();
+        time.Advance(Debounce);
+        Assert.Empty(raised);
+
         policy.Remove("speakers");
         monitor.RaiseEndpointsChanged();
         time.Advance(Debounce);
@@ -126,6 +159,10 @@ public class AudioCollapseDetectorTests
     {
         var (policy, monitor, time, _, raised) = CreateSut();
         policy.Add("speakers", AudioEndpointDirection.Render, isAirPods: false);
+        monitor.RaiseEndpointsChanged();
+        time.Advance(Debounce);
+        Assert.Empty(raised);
+
         policy.Remove("speakers");
         monitor.RaiseEndpointsChanged();
         time.Advance(Debounce);

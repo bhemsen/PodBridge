@@ -10,10 +10,15 @@ namespace PodBridge.Core.Audio;
 /// read from <see cref="IAudioPolicy.GetEndpoints"/>.
 /// <list type="bullet">
 /// <item><b>Threshold:</b> collapsed means the enumerable render+capture endpoint count
-/// is zero — with zero endpoints no default can resolve either, so this single check
-/// covers both symptoms the issue describes. A normal single-device add/remove, a
-/// default-device switch, or an AirPods reconnect never zeroes the whole system's
-/// endpoint count (the built-in/other devices remain), so none of them false-trigger.</item>
+/// is zero AND at least one non-AirPods endpoint was present just before the drop. Zero
+/// endpoints alone is ambiguous on a machine whose ONLY audio device is the AirPods
+/// (e.g. a desktop with no onboard audio): an ordinary AirPods disconnect there also
+/// drops the count to zero, but nothing else vanished, so it must NOT read as "Windows
+/// lost your audio devices" (that copy is specifically about non-AirPods devices, like a
+/// wired line-out, disappearing too). The AirPods/non-AirPods distinction reuses the
+/// same adapter-tagged <see cref="AudioEndpoint.IsAirPods"/> flag Core already trusts
+/// elsewhere (e.g. <c>MicPolicyEngine</c>) rather than inventing a fresh, more fragile
+/// identification here.</item>
 /// <item><b>Debounce:</b> every topology change (re)starts a short settle timer; the
 /// condition is evaluated once the storm of events quiets down, so a burst of
 /// add/remove/default-changed notifications during one real transition is coalesced
@@ -41,6 +46,13 @@ public sealed class AudioCollapseDetector : IDisposable
 
     private bool _collapsed;
 
+    // Whether a non-AirPods endpoint was present the last time the endpoint set was
+    // non-empty. Read (and, while non-empty, refreshed) on every topology-change event,
+    // so the debounced check below can tell a genuine collapse (non-AirPods devices
+    // vanished too) from an ordinary AirPods disconnect on an AirPods-only machine —
+    // false-positive guard added on review of issue #173.
+    private bool _hadNonAirPodsEndpoint;
+
     /// <summary>
     /// Wires the detector to its endpoint-change signal. It only subscribes; starting
     /// the underlying monitor stays the composition root's responsibility.
@@ -66,13 +78,15 @@ public sealed class AudioCollapseDetector : IDisposable
         _debounceTimer = _timeProvider.CreateTimer(
             OnDebounceTick, state: null, dueTime: Timeout.InfiniteTimeSpan, period: Timeout.InfiniteTimeSpan);
 
+        _hadNonAirPodsEndpoint = HasNonAirPodsEndpoint(_audioPolicy.GetEndpoints());
         _endpointChangeMonitor.EndpointsChanged += OnEndpointsChanged;
     }
 
     /// <summary>
     /// Raised once per collapse episode (edge-triggered) after the debounce settles with
-    /// the render+capture endpoint count still at zero. May fire on a background/timer
-    /// thread; handlers must marshal to the UI thread themselves.
+    /// the render+capture endpoint count still at zero AND a non-AirPods endpoint was
+    /// present just before the drop. May fire on a background/timer thread; handlers must
+    /// marshal to the UI thread themselves.
     /// </summary>
     public event EventHandler? CollapseDetected;
 
@@ -86,11 +100,19 @@ public sealed class AudioCollapseDetector : IDisposable
 
     // Every topology change restarts the settle window rather than checking immediately,
     // so a burst of add/remove/default-changed events from one transition collapses into
-    // a single evaluation instead of one per event.
+    // a single evaluation instead of one per event. While the set is still non-empty this
+    // also refreshes the "had a non-AirPods endpoint" memory the debounced check below
+    // relies on, so it reflects the composition from just before a real collapse.
     private void OnEndpointsChanged(object? sender, EventArgs e)
     {
         lock (_gate)
         {
+            var endpoints = _audioPolicy.GetEndpoints();
+            if (endpoints.Count > 0)
+            {
+                _hadNonAirPodsEndpoint = HasNonAirPodsEndpoint(endpoints);
+            }
+
             _debounceTimer.Change(_debounce, Timeout.InfiniteTimeSpan);
         }
     }
@@ -100,7 +122,7 @@ public sealed class AudioCollapseDetector : IDisposable
         bool raise;
         lock (_gate)
         {
-            var isCollapsed = _audioPolicy.GetEndpoints().Count == 0;
+            var isCollapsed = _audioPolicy.GetEndpoints().Count == 0 && _hadNonAirPodsEndpoint;
             raise = isCollapsed && !_collapsed;
             _collapsed = isCollapsed;
         }
@@ -109,5 +131,18 @@ public sealed class AudioCollapseDetector : IDisposable
         {
             CollapseDetected?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    private static bool HasNonAirPodsEndpoint(IReadOnlyList<AudioEndpoint> endpoints)
+    {
+        foreach (var endpoint in endpoints)
+        {
+            if (!endpoint.IsAirPods)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

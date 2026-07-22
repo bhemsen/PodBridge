@@ -56,8 +56,8 @@ public class AudioCollapseGuidanceTests
     public void Step3_recommends_a_full_shutdown_over_sleep_or_hibernate()
     {
         Assert.Contains("shut down", AudioCollapseGuidance.Step3Title, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("sleep", AudioCollapseGuidance.Step3Body, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("hibernate", AudioCollapseGuidance.Step3Body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("sleeping", AudioCollapseGuidance.Step3Body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("hibernating", AudioCollapseGuidance.Step3Body, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

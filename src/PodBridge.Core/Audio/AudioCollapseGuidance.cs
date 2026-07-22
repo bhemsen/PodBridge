@@ -62,5 +62,5 @@ public static class AudioCollapseGuidance
     /// <summary>Step 3 body.</summary>
     public const string Step3Body =
         "Between long idle periods, a full shutdown avoids the resume path that triggers this, "
-        + "rather than sleep or hibernate.";
+        + "rather than sleeping or hibernating.";
 }
