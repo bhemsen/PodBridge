@@ -57,9 +57,14 @@ are in the **[user guide](docs/user/README.md)**.
 | Honest AAC / codec guidance | ✅ | — | ❌ | ❌ |
 | Microphone-profile policy | ✅ | — | ❌ | ❌ |
 | Noise-control switching (ANC / Transparency) | ✅ opt-in¹ | ✅ | ❌ | ❌ |
-| Gesture remap | ✅ opt-in¹ | ✅ | ❌ | ❌ |
+| Gesture remap | ⚠️ opt-in¹, experimental² | ✅ | ❌ | ❌ |
 
 ¹ Advanced-tier features use the optional, clearly-warned add-on driver.
+² Gesture remap is **experimental**: current AirPods Pro 2 firmware often ignores
+the press-and-hold command, so the setting may have no effect
+([#160](https://github.com/bhemsen/PodBridge/issues/160)). Every other feature is
+unaffected.
+
 "—" = not a documented focus of that tool. This reflects publicly-documented
 features (see [`docs/prior-art.md`](docs/prior-art.md)) and may change.
 
@@ -67,7 +72,7 @@ features (see [`docs/prior-art.md`](docs/prior-art.md)) and may change.
 driver-based; the open alternatives are driver-free but battery-and-play/pause
 only. **PodBridge is the only open, free, driver-free-by-default option that also
 adds codec/microphone honesty — with noise-control and gestures as an explicit
-opt-in.**
+opt-in** (gesture remap is experimental, see ² above).
 
 ## Scope & honesty
 
