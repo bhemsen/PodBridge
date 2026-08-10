@@ -11,3 +11,20 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    # CodeQL requires the init and analyze steps to run the SAME action version:
+    # a split bump fails with "Loaded a configuration file for version 'X', but
+    # running version 'Y'". Dependabot treats github/codeql-action/init and
+    # /analyze as separate dependencies, so ungrouped it opens two PRs that each
+    # break the Analyze check in isolation (happened in #167+#169, again in
+    # #181+#182). Grouping them makes the pair arrive as one PR.
+    # A group without `applies-to` covers version updates only, so the pair is
+    # declared twice — a security advisory for codeql-action would otherwise
+    # still arrive as two ungrouped, mutually-blocking PRs.
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
+      codeql-action-security:
+        applies-to: security-updates
+        patterns:
+          - "github/codeql-action/*"
