@@ -15,7 +15,9 @@ namespace PodBridge.App;
 /// <see cref="TrayNoiseControlController"/> binds the Core noise-control logic.
 /// <list type="bullet">
 /// <item>Driver present + supported model → per-bud pickers (honest action set) + Apply;
-/// the choice is persisted and re-applied on every reconnect via the Core re-push policy.</item>
+/// the choice is persisted and re-sent on every reconnect via the Core re-push policy — the
+/// device may ignore it, so the surface claims only the send (see
+/// <see cref="GestureSupport.ExperimentalNoticeText"/>).</item>
 /// <item>Driver absent (Tier-1 default) → the pickers are replaced by the <b>reused</b>
 /// Phase-6 driver-absent notice (<see cref="TrayNoiseControlController.UnavailableText"/>,
 /// no new signed-driver claim) and the opt-in "Enable advanced tier" affordance — never
@@ -85,6 +87,8 @@ public partial class GestureSettingsWindow : Window
 
         if (availability == GestureAvailability.Available)
         {
+            // Honest caveat first: current Pro 2 firmware often ignores the command (#160).
+            ExperimentalNotice.Text = GestureSupport.ExperimentalNoticeText;
             PopulatePickers(state.Model);
         }
         else if (availability == GestureAvailability.DriverUnavailable)
@@ -144,12 +148,13 @@ public partial class GestureSettingsWindow : Window
         StatusText.Visibility = Visibility.Visible;
     }
 
+    // Reports what PodBridge actually observed (an acknowledgement), never that the gesture
+    // is now in effect — on current Pro 2 firmware the device may ack nothing and change
+    // nothing (#160). Both device-outcome strings live in Core so they are unit-tested.
     private static string OutcomeMessage(GestureRepushOutcome outcome) => outcome switch
     {
-        GestureRepushOutcome.Confirmed => "Applied to your AirPods.",
-        GestureRepushOutcome.CouldNotApply =>
-            "Saved. Your AirPods didn't confirm it just now, so it'll be re-applied the next "
-            + "time they reconnect.",
+        GestureRepushOutcome.Confirmed => GestureSupport.AcknowledgedText,
+        GestureRepushOutcome.CouldNotApply => GestureSupport.CouldNotConfirmText,
         _ => "The advanced-tier driver isn't available, so nothing was changed.",
     };
 

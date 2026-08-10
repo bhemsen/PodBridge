@@ -20,6 +20,37 @@ namespace PodBridge.Core.Protocol;
 public static class GestureSupport
 {
     /// <summary>
+    /// Honest up-front notice that press-and-hold remap is unverified on real hardware.
+    /// The Phase-7 hardware-QA gate found the ClickHoldMode <c>0x16</c> SET frame is neither
+    /// echoed nor applied by current AirPods Pro 2 firmware, while the noise-control SET over
+    /// the same channel is confirmed and audible — so the command, not the transport, is at
+    /// fault (issue #160). Until the frame is re-derived clean-room against current firmware,
+    /// the surface must not imply the change took effect (constitution: honest surface).
+    /// </summary>
+    public const string ExperimentalNoticeText =
+        "Experimental: current AirPods Pro 2 firmware often ignores this command. PodBridge " +
+        "sends your choice, but your AirPods may keep their previous press-and-hold action. " +
+        "Check on your AirPods whether it took effect.";
+
+    /// <summary>
+    /// Honest outcome text when the device echoed the gesture write. Reports the
+    /// acknowledgement only — an echo is not proof the press-and-hold action actually
+    /// changed, and on affected firmware this branch is not reached at all (issue #160).
+    /// </summary>
+    public const string AcknowledgedText = "Your AirPods acknowledged the change.";
+
+    /// <summary>
+    /// Honest outcome text when the device did not acknowledge the gesture write. States the
+    /// likely cause and that PodBridge retries, without promising the retry will succeed —
+    /// the earlier copy claimed the choice would simply "be re-applied the next time they
+    /// reconnect", which on affected firmware never comes true (issue #160).
+    /// </summary>
+    public const string CouldNotConfirmText =
+        "Saved, but your AirPods didn't confirm it — current firmware often ignores this " +
+        "command, so it may not take effect. PodBridge will send it again the next time " +
+        "they reconnect.";
+
+    /// <summary>
     /// True when <paramref name="model"/> exposes a remappable press-and-hold gesture
     /// (ClickHoldMode <c>0x16</c>). Gated on the AirPods Pro 2 reference model — matching
     /// <see cref="NoiseControlSupport.SupportsAdaptive"/> — until the Phase-8 capability
