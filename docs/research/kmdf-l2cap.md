@@ -215,7 +215,7 @@ tokens; the design decisions match Sources 1–4 and the spec's Prior decisions.
   elevated** step — never bundled in the Phase-5 MSIX (MSIX cannot cleanly carry a
   kernel driver), and never run silently.
 
-### (d) Signing + load reality on x64 (BOTH requirements)
+### (d) Signing + load reality on x64 (see the correction below: THREE requirements)
 
 > **Correction — this section is incomplete as originally written.** It lists two
 > requirements; there are **three**, plus one blocker. Recorded here because this

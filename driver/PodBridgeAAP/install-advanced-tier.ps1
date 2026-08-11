@@ -164,14 +164,20 @@ function Remove-TestCertificate {
     }
 }
 
-# Report the three machine-wide load preconditions BEFORE anything is changed, so a user
-# is never left having lowered their security for a driver that still cannot load.
+# Report the machine-wide load preconditions BEFORE anything is changed, so a user is
+# never left having lowered their security for a driver that still cannot load.
 #
-# Memory Integrity (HVCI) is the one that silently defeats everything else: while it
-# enforces, Windows refuses a test-signed driver however the other two are set. Every
-# probe is best-effort -- an unreadable key or a blocked bcdedit must never hard-fail
-# the install, so an unknown reads as "unknown" and only HVCI (which we can read
-# reliably) aborts.
+# Memory Integrity (HVCI) and an enforced WDAC policy each silently defeat everything
+# else: while either holds, Windows refuses a test-signed driver however Secure Boot and
+# test-signing are set.
+#
+# Test-signing itself is NOT probed. Reading it means running bcdedit, and the project
+# promises -- in the docs, in the app dialog, and via a command deny-list -- that
+# PodBridge never runs bcdedit on the user's behalf. An absolute, auditable promise is
+# worth more than one row in a table, so the script tells the user how to check instead.
+#
+# Probes fail CLOSED: an unreadable value reads as "unknown" and says so, rather than
+# being reported as a passing precondition.
 function Show-LoadPreconditions {
     Write-Host '== load preconditions =='
 
@@ -182,37 +188,60 @@ function Show-LoadPreconditions {
     }
     catch { }
 
-    $hvci = $false
+    # $null, deliberately NOT $false: with $false as the initial value, a machine whose
+    # WMI is broken would be reported "Memory Integrity off -- OK" and sail into an
+    # install that cannot possibly work. This probe fails CLOSED; unknown reads unknown.
+    $hvci = $null
+    $wdac = $null
     try {
         $dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard `
             -ClassName Win32_DeviceGuard -ErrorAction Stop
-        $hvci = ($null -ne $dg.SecurityServicesRunning -and $dg.SecurityServicesRunning -contains 2)
-    }
-    catch { }
-
-    $testSigning = $null
-    try {
-        $bcd = & bcdedit.exe /enum '{current}' 2>$null
-        if ($LASTEXITCODE -eq 0) { $testSigning = [bool]($bcd -match 'testsigning\s+Yes') }
+        $hvci = [bool]($null -ne $dg.SecurityServicesRunning -and $dg.SecurityServicesRunning -contains 2)
+        # 2 = Enforced. A WDAC code-integrity policy in enforcement blocks a test-signed
+        # driver independently of HVCI, and is common on managed work PCs -- exactly the
+        # machine this project's primary persona uses.
+        $wdac = [bool]($dg.CodeIntegrityPolicyEnforcementStatus -eq 2)
     }
     catch { }
 
     function Format-State($actual, $wanted) {
-        if ($null -eq $actual) { return 'unknown' }
+        if ($null -eq $actual) { return 'UNKNOWN' }
         if ($actual -eq $wanted) { return 'OK' }
         return 'BLOCKS LOADING'
     }
 
     $sbText = if ($null -eq $secureBoot) { 'unknown' } elseif ($secureBoot) { 'ON' } else { 'off' }
-    $tsText = if ($null -eq $testSigning) { 'unknown' } elseif ($testSigning) { 'on' } else { 'OFF' }
-    $hvText = if ($hvci) { 'ON' } else { 'off' }
+    $hvText = if ($null -eq $hvci) { 'unknown' } elseif ($hvci) { 'ON' } else { 'off' }
+    $wdText = if ($null -eq $wdac) { 'unknown' } elseif ($wdac) { 'ENFORCED' } else { 'off' }
 
     Write-Host ("  Secure Boot       : {0,-8} {1}" -f $sbText, (Format-State $secureBoot $false))
-    Write-Host ("  Test-signing mode : {0,-8} {1}" -f $tsText, (Format-State $testSigning $true))
     Write-Host ("  Memory Integrity  : {0,-8} {1}" -f $hvText, (Format-State $hvci $false))
+    Write-Host ("  WDAC enforcement  : {0,-8} {1}" -f $wdText, (Format-State $wdac $false))
+    Write-Host '  Test-signing mode : not checked -- see below'
+    Write-Host ''
+    Write-Host 'Test-signing state is deliberately NOT probed here: PodBridge never runs'
+    Write-Host 'bcdedit, not even read-only, so that the promise stays absolute and'
+    Write-Host 'auditable. Check it yourself with:  bcdedit /enum {current}'
     Write-Host ''
 
-    if ($hvci) {
+    if ($null -eq $hvci) {
+        Write-Warning @'
+Could not determine whether Memory Integrity is on (the DeviceGuard WMI class did not
+answer). If it IS on, Windows will refuse this driver however you set everything else.
+Check: Windows Security > Device security > Core isolation.
+'@
+    }
+
+    if ($wdac -eq $true) {
+        Write-Warning @'
+A WDAC code-integrity policy is ENFORCED on this PC (often set by an employer's device
+management). It blocks test-signed drivers independently of Memory Integrity, and you
+usually cannot override it yourself -- talk to whoever manages the machine before
+changing any security setting for this.
+'@
+    }
+
+    if ($hvci -eq $true) {
         Write-Warning @'
 Memory Integrity (HVCI) is ENFORCING on this PC.
 Windows will refuse to load a test-signed driver while it is on -- turning off Secure

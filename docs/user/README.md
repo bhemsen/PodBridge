@@ -14,7 +14,8 @@ This guide covers the **driver-free MVP** (Tier 1): download and verify, the
 caveats, the microphone-profile modes, the start-with-Windows toggle, and
 uninstall. The
 optional **advanced tier** (noise-control switching) needs a separate opt-in
-driver and two machine-wide security changes; it is documented separately in the
+driver and three machine-wide security changes — and it cannot load at all while
+Memory Integrity is on; it is documented separately in the
 [**advanced-tier guide**](advanced-tier.md) and summarised under
 [Advanced tier (optional)](#advanced-tier-optional) below.
 
@@ -272,18 +273,29 @@ Adaptive) from the tray on supported AirPods (reference model AirPods Pro 2).
 It is **not** part of the default experience and is **not** required for any
 Tier-1 feature. Because Windows only lets a **kernel driver** reach the AirPods
 noise-control channel, enabling it means installing a small driver and — honestly
-— making **two machine-wide security changes** so a **test-signed** (not
+— making **three machine-wide security changes** so a **test-signed** (not
 Microsoft-signed) driver can load on 64-bit Windows:
 
-1. **Enabling test-signing mode** (`bcdedit /set testsigning on` + reboot) — a
+1. **Turning Secure Boot off** — a precondition of test-signing mode, changed in
+   your PC's UEFI/BIOS setup; PodBridge never touches it. This is the costliest
+   of the three, because Secure Boot protects the boot path itself. On a
+   BitLocker-encrypted disk it can trigger a **recovery-key** prompt at the next
+   boot — have your key ready, or suspend protection first
+   (`manage-bde -protectors -disable C: -rebootcount 2`).
+2. **Enabling test-signing mode** (`bcdedit /set testsigning on` + reboot) — a
    manual step **you** perform; PodBridge never runs `bcdedit` for you.
-2. **Trusting a self-signed test certificate** — the opt-in installer imports it
+3. **Trusting a self-signed test certificate** — the opt-in installer imports it
    into your machine's Trusted Root CA and Trusted Publishers stores.
 
-Together these lower your machine's driver-security bar until you undo them; both
-are reversible, and Tier 1 keeps working without either. PodBridge makes **no**
-claim of a Microsoft-signed driver; the attestation path (EV certificate +
-Partner Center) is a deferred, out-of-scope option.
+**Check Memory Integrity first** (Windows Security → Device security → Core
+isolation). While it is on, Windows refuses to load a test-signed driver whatever
+you do above — so you would lower your security for nothing. The installer checks
+this for you and stops without changing anything.
+
+Together these lower your machine's driver-security bar until you undo them; all
+three are reversible, and Tier 1 keeps working without any of them. PodBridge
+makes **no** claim of a Microsoft-signed driver; the attestation path (EV
+certificate + Partner Center) is a deferred, out-of-scope option.
 
 The full opt-in install / uninstall flow, the security trade-off, and how to
 start it from the tray (**Noise control → Enable advanced tier…**) are in the

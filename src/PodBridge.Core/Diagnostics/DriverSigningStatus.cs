@@ -7,7 +7,7 @@ namespace PodBridge.Core.Diagnostics;
 /// <para>
 /// These are fixed, documented facts about how the optional driver is built and loaded
 /// (spec docs/specs/spec-advanced-driver-anc.md) — <b>not</b> a live per-machine
-/// test-signing probe. Phase 8 reopens no signing decision: it states the same two facts
+/// test-signing probe. Phase 8 reopens no signing decision: it restates the same facts
 /// <see cref="AdvancedTier.AdvancedTierInfo.SecurityWarning"/> already tells the user before
 /// they opt in, keyed only on whether the driver is currently loaded
 /// (<see cref="Protocol.IAapTransport.IsAvailable"/>).

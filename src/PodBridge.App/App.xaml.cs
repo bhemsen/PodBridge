@@ -213,7 +213,7 @@ public partial class App : Application
         _trayIcon!.SetEnableAdvancedTierHandler(EnableAdvancedTier);
     }
 
-    // Explicit, user-triggered opt-in. Warns about BOTH machine-wide load requirements
+    // Explicit, user-triggered opt-in. Warns about ALL THREE machine-wide load requirements
     // (test-signing mode — which the user enables themselves; PodBridge never runs bcdedit —
     // and trusting the self-signed test cert) and the trade-off, then launches the elevated
     // installer (IAdvancedTierInstaller). When the driver package is absent (it ships

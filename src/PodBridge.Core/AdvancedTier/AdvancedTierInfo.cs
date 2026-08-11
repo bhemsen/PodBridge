@@ -8,9 +8,10 @@ namespace PodBridge.Core.AdvancedTier;
 /// strings verbatim in the "Enable advanced tier" warning; the same facts appear in
 /// docs/user/advanced-tier.md.
 /// <para>
-/// Honesty gate: the copy states BOTH x64 load requirements — (1) enabling Windows
-/// test-signing mode yourself and (2) trusting a self-signed test certificate — and their
-/// combined machine-wide security trade-off, and makes NO claim of a Microsoft-signed /
+/// Honesty gate: the copy states ALL THREE x64 load requirements — (1) turning Secure Boot
+/// off, (2) enabling Windows test-signing mode yourself and (3) trusting a self-signed test
+/// certificate — plus the Memory-Integrity (HVCI) blocker that refuses the driver regardless,
+/// their combined machine-wide security trade-off, and makes NO claim of a Microsoft-signed /
 /// production-attested driver.
 /// </para>
 /// </summary>

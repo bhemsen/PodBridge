@@ -5,9 +5,10 @@ namespace PodBridge.Core.Tests.Docs;
 
 /// <summary>
 /// Device-independent guards (constitution Tier-1 gate) over the advanced-tier user guide
-/// authored for issue #45. They pin the honesty gate: the doc states BOTH x64 load
-/// requirements (test-signing mode via <c>bcdedit</c> AND trusting the self-signed test cert
-/// in Trusted Root CA / Trusted Publishers) and their trade-off, documents the opt-in
+/// authored for issue #45. They pin the honesty gate: the doc states ALL THREE x64 load
+/// requirements (Secure Boot off, test-signing mode via <c>bcdedit</c>, AND trusting the
+/// self-signed test cert in Trusted Root CA / Trusted Publishers), the Memory-Integrity
+/// blocker that refuses the driver regardless, their trade-off, documents the opt-in
 /// <c>pnputil</c> install, makes NO Microsoft-signed / production claim, and records the
 /// attestation path (EV cert + Partner Center) as deferred / out of scope — so the shipped
 /// doc cannot silently drift from the honesty the spec requires.
@@ -30,13 +31,41 @@ public class AdvancedTierDocsTests
     }
 
     [Fact]
-    public void Guide_StatesBothX64LoadRequirements()
+    public void Guide_StatesAllThreeX64LoadRequirements()
     {
-        // (1) test-signing mode, stated as the user's own manual bcdedit step.
+        // (1) Secure Boot off — the precondition the guide used to omit entirely, which made
+        // it promise a two-step cost for what is really three (and the costliest one at that).
+        Assert.Contains("Secure Boot", Guide, StringComparison.OrdinalIgnoreCase);
+        // (2) test-signing mode, stated as the user's own manual bcdedit step.
         Assert.Contains("bcdedit /set testsigning on", Guide, StringComparison.Ordinal);
-        // (2) trusting the self-signed test cert in BOTH machine stores.
+        // (3) trusting the self-signed test cert in BOTH machine stores.
         Assert.Contains("Trusted Root", Guide, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Trusted Publishers", Guide, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // With HVCI enforcing, all three steps above still leave the driver unloadable — so a
+    // guide that omits it invites the user to weaken the machine for nothing.
+    [Fact]
+    public void Guide_NamesMemoryIntegrityAsABlocker()
+    {
+        Assert.Contains("Memory Integrity", Guide, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Core isolation", Guide, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Changing Secure Boot on a BitLocker disk can lock the user out of their own machine.
+    [Fact]
+    public void Guide_WarnsAboutTheBitLockerRecoveryPrompt()
+    {
+        Assert.Contains("BitLocker", Guide, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("recovery key", Guide, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // The guide must tell a user how to get out, not just how to get in.
+    [Fact]
+    public void Guide_DocumentsARecoveryPath()
+    {
+        Assert.Contains("Safe Mode", Guide, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("pnputil /delete-driver", Guide, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
