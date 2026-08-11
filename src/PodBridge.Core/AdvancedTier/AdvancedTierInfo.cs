@@ -29,18 +29,34 @@ public static class AdvancedTierInfo
         + "installs a small kernel driver separately from PodBridge — never automatically.";
 
     /// <summary>
-    /// The honest security explanation shown before the elevated install runs. States both
-    /// machine-wide load requirements and the trade-off, and that PodBridge never runs
-    /// <c>bcdedit</c> for the user. Contains no Microsoft-signed / production claim.
+    /// The honest security explanation shown before the elevated install runs. States all
+    /// THREE machine-wide load requirements — Secure Boot off, test-signing mode on, and the
+    /// self-signed test certificate trusted — plus the Memory-Integrity (HVCI) blocker that
+    /// stops the driver loading regardless, the combined trade-off, and that PodBridge never
+    /// runs <c>bcdedit</c> for the user. Contains no Microsoft-signed / production claim.
+    /// <para>
+    /// Secure Boot and HVCI were added after a user asked whether this driver could have
+    /// bricked a PC: the copy promised "TWO" changes while silently requiring a third (Secure
+    /// Boot off is a precondition of test-signing), and never mentioned that on a machine with
+    /// Memory Integrity enforcing the driver cannot load at all — so a user could lower two
+    /// machine-wide protections and still get nothing.
+    /// </para>
     /// </summary>
     public const string SecurityWarning =
-        "Loading this driver on 64-bit Windows requires TWO machine-wide security changes, "
+        "Loading this driver on 64-bit Windows requires THREE machine-wide security changes, "
         + "and it is NOT a Microsoft-signed driver:\n\n"
-        + "1. Test-signing mode — you must enable it yourself with "
+        + "1. Secure Boot must be OFF — test-signing mode cannot be enabled while it is on. "
+        + "You turn it off in your PC's UEFI/BIOS setup; PodBridge cannot and does not change "
+        + "it. If your disk is BitLocker-encrypted, changing Secure Boot can trigger a "
+        + "recovery-key prompt on the next boot — have your key ready.\n"
+        + "2. Test-signing mode — you must enable it yourself with "
         + "\"bcdedit /set testsigning on\" and reboot. PodBridge never runs bcdedit for you.\n"
-        + "2. Trusting a self-signed test certificate — the installer imports it into your "
+        + "3. Trusting a self-signed test certificate — the installer imports it into your "
         + "machine's Trusted Root Certification Authorities and Trusted Publishers stores.\n\n"
-        + "Together these lower your machine's driver-security bar until you undo them. Both "
+        + "Check Memory Integrity too (Windows Security > Device security > Core isolation). "
+        + "While it is on, Windows refuses to load a test-signed driver even after all three "
+        + "steps above — you would lower your security for nothing.\n\n"
+        + "Together these lower your machine's driver-security bar until you undo them. All "
         + "are opt-in and reversible, and every default (Tier-1) feature keeps working "
         + "without them. Continue to the elevated installer?";
 

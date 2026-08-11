@@ -23,15 +23,24 @@
     (pnputil /delete-driver <oemNN.inf> /uninstall) and removes the test cert from
     both machine stores.
 
-    HONEST LOAD REALITY (x64) -- BOTH machine-wide changes are required to load
-    this driver; this script does exactly ONE of them (the cert trust, inside the
-    opt-in). The OTHER -- enabling test-signing mode -- is a manual user step this
-    script NEVER performs:
+    HONEST LOAD REALITY (x64) -- THREE machine-wide conditions must hold before
+    this driver can load. This script performs exactly ONE of them (the cert
+    trust, inside the opt-in) and only REPORTS the other two:
 
-        bcdedit /set testsigning on     (then reboot)
+        1. Secure Boot OFF   -- a precondition of test-signing mode; you change
+                                this in UEFI/BIOS. On a BitLocker disk it can
+                                trigger a recovery-key prompt at next boot.
+        2. bcdedit /set testsigning on     (then reboot)
+        3. the test cert trusted           <- the only one this script does
 
-    `bcdedit` is a machine-wide security change on the PodBridge deny-list; the
-    app and this script never run it on your behalf. The script only reminds you.
+    `bcdedit` and UEFI settings are machine-wide security changes on the PodBridge
+    deny-list; the app and this script never make them on your behalf.
+
+    Additionally, Memory Integrity (HVCI, Windows Security > Device security >
+    Core isolation) must be OFF: while it enforces, Windows refuses a test-signed
+    driver regardless of the three above. Install aborts if it detects HVCI, so
+    you do not weaken the machine for a driver that still cannot load; -Force
+    overrides that check.
 
     This driver is TEST-signed with a locally-generated self-signed certificate.
     It is NOT Microsoft-signed / attestation-signed. The production path (an EV
@@ -40,6 +49,10 @@
 
 .PARAMETER Action
     install (default) or uninstall.
+
+.PARAMETER Force
+    Install even when Memory Integrity (HVCI) is detected as enforcing. Without it
+    the install aborts on that check, having changed nothing.
 
 .PARAMETER PackageDir
     Folder holding the built + test-signed package (PodBridgeAAP.inf/.sys/.cat and
@@ -60,7 +73,8 @@
 param(
     [ValidateSet('install', 'uninstall')]
     [string]$Action = 'install',
-    [string]$PackageDir
+    [string]$PackageDir,
+    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -89,6 +103,7 @@ function Invoke-SelfElevation {
         '-Action', $Action
     )
     if ($PackageDir) { $psArgs += @('-PackageDir', "`"$PackageDir`"") }
+    if ($Force) { $psArgs += '-Force' }
     try {
         $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $psArgs -Verb RunAs -PassThru -Wait
         exit $p.ExitCode
@@ -149,11 +164,91 @@ function Remove-TestCertificate {
     }
 }
 
+# Report the three machine-wide load preconditions BEFORE anything is changed, so a user
+# is never left having lowered their security for a driver that still cannot load.
+#
+# Memory Integrity (HVCI) is the one that silently defeats everything else: while it
+# enforces, Windows refuses a test-signed driver however the other two are set. Every
+# probe is best-effort -- an unreadable key or a blocked bcdedit must never hard-fail
+# the install, so an unknown reads as "unknown" and only HVCI (which we can read
+# reliably) aborts.
+function Show-LoadPreconditions {
+    Write-Host '== load preconditions =='
+
+    $secureBoot = $null
+    try {
+        $sb = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -ErrorAction Stop
+        $secureBoot = [bool]$sb.UEFISecureBootEnabled
+    }
+    catch { }
+
+    $hvci = $false
+    try {
+        $dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard `
+            -ClassName Win32_DeviceGuard -ErrorAction Stop
+        $hvci = ($null -ne $dg.SecurityServicesRunning -and $dg.SecurityServicesRunning -contains 2)
+    }
+    catch { }
+
+    $testSigning = $null
+    try {
+        $bcd = & bcdedit.exe /enum '{current}' 2>$null
+        if ($LASTEXITCODE -eq 0) { $testSigning = [bool]($bcd -match 'testsigning\s+Yes') }
+    }
+    catch { }
+
+    function Format-State($actual, $wanted) {
+        if ($null -eq $actual) { return 'unknown' }
+        if ($actual -eq $wanted) { return 'OK' }
+        return 'BLOCKS LOADING'
+    }
+
+    $sbText = if ($null -eq $secureBoot) { 'unknown' } elseif ($secureBoot) { 'ON' } else { 'off' }
+    $tsText = if ($null -eq $testSigning) { 'unknown' } elseif ($testSigning) { 'on' } else { 'OFF' }
+    $hvText = if ($hvci) { 'ON' } else { 'off' }
+
+    Write-Host ("  Secure Boot       : {0,-8} {1}" -f $sbText, (Format-State $secureBoot $false))
+    Write-Host ("  Test-signing mode : {0,-8} {1}" -f $tsText, (Format-State $testSigning $true))
+    Write-Host ("  Memory Integrity  : {0,-8} {1}" -f $hvText, (Format-State $hvci $false))
+    Write-Host ''
+
+    if ($hvci) {
+        Write-Warning @'
+Memory Integrity (HVCI) is ENFORCING on this PC.
+Windows will refuse to load a test-signed driver while it is on -- turning off Secure
+Boot and enabling test-signing would weaken this machine for nothing.
+
+Turn it off first if you want the advanced tier:
+  Windows Security > Device security > Core isolation > Memory integrity -> Off, reboot.
+
+Nothing has been changed.
+'@
+        if (-not $Force) {
+            throw 'Aborted on the Memory Integrity check. Re-run with -Force to install anyway.'
+        }
+        Write-Host '-Force given: continuing despite Memory Integrity.' -ForegroundColor Yellow
+    }
+
+    if ($secureBoot) {
+        Write-Warning @'
+Secure Boot is ON. Test-signing mode cannot be enabled until you turn it off in this
+PC's UEFI/BIOS setup -- PodBridge cannot and does not change it.
+
+If this disk is BitLocker-encrypted, changing Secure Boot can trigger a recovery-key
+prompt on the next boot. Have your recovery key to hand, or suspend protection first:
+  manage-bde -protectors -disable C: -rebootcount 2
+'@
+    }
+}
+
 function Install-AdvancedTier {
     $dir = Resolve-PackageDir
     $inf = Join-Path $dir $infName
     if (-not (Test-Path $inf)) { throw "Driver INF not found: $inf" }
     $cer = Resolve-CertPath $dir
+
+    # Check before changing anything -- this can abort, and must abort having done nothing.
+    Show-LoadPreconditions
 
     # 1) Trust the test cert FIRST so the package can load once test-signing is on.
     Import-TestCertificate $cer
@@ -165,13 +260,16 @@ function Install-AdvancedTier {
 
     Write-Host ''
     Write-Host 'Driver installed and test cert trusted.' -ForegroundColor Green
-    Write-Host 'ONE machine-wide step remains -- do it yourself; this script never runs bcdedit:' -ForegroundColor Yellow
-    Write-Host '    bcdedit /set testsigning on'
-    Write-Host '    (from an elevated prompt, then REBOOT)'
+    Write-Host 'Machine-wide steps that remain -- do them yourself; this script never' -ForegroundColor Yellow
+    Write-Host 'runs bcdedit and never touches UEFI:' -ForegroundColor Yellow
+    Write-Host '  - Secure Boot OFF (UEFI/BIOS setup) if it is still on'
+    Write-Host '  - bcdedit /set testsigning on   (elevated prompt, then REBOOT)'
     Write-Host ''
-    Write-Host 'Test-signing mode + this trusted test cert together weaken machine security;'
-    Write-Host 'both are opt-in and reversible. This driver is NOT Microsoft-signed.'
-    Write-Host 'See docs/user/advanced-tier.md.'
+    Write-Host 'See the precondition table printed above for the current state of each.'
+    Write-Host 'Secure Boot off + test-signing on + this trusted test cert together weaken'
+    Write-Host 'machine security; all are opt-in and reversible, and every default (Tier-1)'
+    Write-Host 'feature works without them. This driver is NOT Microsoft-signed.'
+    Write-Host 'See docs/user/advanced-tier.md, including how to recover if it misbehaves.'
 }
 
 function Uninstall-AdvancedTier {
@@ -199,8 +297,15 @@ function Uninstall-AdvancedTier {
 
     Write-Host ''
     Write-Host 'Advanced-tier driver removed and test cert un-trusted.' -ForegroundColor Green
-    Write-Host 'If you enabled test-signing mode for this, you can turn it off yourself:'
-    Write-Host '    bcdedit /set testsigning off   (elevated, then reboot)'
+    Write-Host 'Two machine-wide changes stay until YOU reverse them:' -ForegroundColor Yellow
+    Write-Host '  1. Test-signing mode:'
+    Write-Host '       bcdedit /set testsigning off   (elevated, then reboot)'
+    Write-Host '  2. Secure Boot -- re-enable it in your UEFI/BIOS setup if you turned it'
+    Write-Host '     off for this. Leaving it off is the larger of the two security costs.'
+    Write-Host '     On a BitLocker disk, expect a recovery-key prompt; suspend first with'
+    Write-Host '       manage-bde -protectors -disable C: -rebootcount 2'
+    Write-Host '  (Also re-enable Memory Integrity if you turned it off:'
+    Write-Host '   Windows Security > Device security > Core isolation.)'
 }
 
 Invoke-SelfElevation

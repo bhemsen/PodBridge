@@ -37,6 +37,35 @@ public class AdvancedTierInfoTests
         => Assert.Contains(
             "machine-wide", AdvancedTierInfo.SecurityWarning, StringComparison.OrdinalIgnoreCase);
 
+    // The copy used to promise "TWO" changes while silently requiring a third: test-signing
+    // mode cannot be enabled while Secure Boot is on. Understating the cost of a machine-wide
+    // security downgrade is exactly what the honest-surface rule forbids.
+    [Fact]
+    public void SecurityWarning_states_the_Secure_Boot_precondition()
+    {
+        Assert.Contains("Secure Boot", AdvancedTierInfo.SecurityWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("THREE", AdvancedTierInfo.SecurityWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "TWO machine-wide", AdvancedTierInfo.SecurityWarning, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // With HVCI enforcing, a test-signed driver is refused regardless of the three steps —
+    // so without this warning a user can lower two protections and still get nothing.
+    [Fact]
+    public void SecurityWarning_warns_that_Memory_Integrity_blocks_the_load_entirely()
+    {
+        Assert.Contains(
+            "Memory Integrity", AdvancedTierInfo.SecurityWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "refuses to load", AdvancedTierInfo.SecurityWarning, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // BitLocker plus a Secure Boot change is a real way to lock yourself out of your own disk.
+    [Fact]
+    public void SecurityWarning_warns_about_the_BitLocker_recovery_prompt()
+        => Assert.Contains(
+            "recovery-key", AdvancedTierInfo.SecurityWarning, StringComparison.OrdinalIgnoreCase);
+
     [Fact]
     public void SecurityWarning_makes_no_Microsoft_signed_claim()
         => Assert.Contains(

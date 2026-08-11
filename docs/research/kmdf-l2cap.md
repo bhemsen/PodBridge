@@ -217,6 +217,27 @@ tokens; the design decisions match Sources 1–4 and the spec's Prior decisions.
 
 ### (d) Signing + load reality on x64 (BOTH requirements)
 
+> **Correction — this section is incomplete as originally written.** It lists two
+> requirements; there are **three**, plus one blocker. Recorded here because this
+> section is the authority the driver, the installer, the in-app warning and the
+> Phase-6 QA guide were all written from, so the omission propagated into every
+> one of them.
+>
+> - **Missing prerequisite: Secure Boot must be OFF.** `bcdedit /set testsigning
+>   on` is refused while Secure Boot is enabled, so item 1 below silently depends
+>   on a *third* machine-wide change — the one with the largest security cost,
+>   since Secure Boot protects the boot path itself. On a BitLocker volume it also
+>   changes the sealed PCR measurement and can force a recovery-key prompt.
+> - **Missing blocker: Memory Integrity (HVCI).** While Core isolation → Memory
+>   integrity enforces, Windows refuses a test-signed driver **regardless** of all
+>   three items. A user could complete every step below and still have a
+>   non-loading driver, having lowered two protections for nothing.
+>
+> Both are now reflected in `AdvancedTierInfo.SecurityWarning`,
+> `docs/user/advanced-tier.md`, `docs/qa/phase-6-advanced-driver-anc.md`, and a
+> pre-flight check in `install-advanced-tier.ps1` that aborts before changing
+> anything. The list below is left as first written, as the dated record.
+
 To load the self-signed **test-signed** KMDF driver on x64, **both** are required —
 neither alone is sufficient:
 
