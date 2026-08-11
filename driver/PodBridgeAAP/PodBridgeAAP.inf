@@ -56,13 +56,18 @@ ServiceBinary = %13%\PodBridgeAAP.sys
 
 ; Let a normal (non-elevated, asInvoker) user session open the device interface:
 ; elevation is only for install, not for runtime I/O (research #40 (b)). SDDL
-; grants the driver/system/admins full access and Everyone read+write.
+; grants the driver/system/admins full access and INTERACTIVE users read+write.
+;
+; IU (interactive logon session), not WD (Everyone): the PodBridge tray app runs
+; as the signed-in user, so IU is all the runtime path needs, while WD would also
+; hand the AAP channel to every service, network logon and anonymous caller on the
+; box. Anyone holding it can drive arbitrary L2CAP traffic to the paired AirPods.
 [PodBridgeAAP_Device.NT.HW]
 AddReg = PodBridgeAAP_AddReg
 
 [PodBridgeAAP_AddReg]
 HKR,,DeviceCharacteristics,0x10001,0x0100 ; FILE_DEVICE_SECURE_OPEN
-HKR,,Security,,"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;WD)"
+HKR,,Security,,"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)"
 
 ; KMDF, coinstaller-free.
 [PodBridgeAAP_Device.NT.Wdf]

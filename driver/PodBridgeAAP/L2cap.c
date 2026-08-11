@@ -143,8 +143,25 @@ PodBridgeReceiveThreadRoutine(
 {
     PPODBRIDGE_DEVICE_CONTEXT context = (PPODBRIDGE_DEVICE_CONTEXT)StartContext;
     struct _BRB_L2CA_ACL_TRANSFER *brb;
+    L2CAP_CHANNEL_HANDLE handle;
     PVOID buffer;
     NTSTATUS status;
+    ULONG received;
+
+    //
+    // Snapshot the channel handle once instead of re-reading the shared field on
+    // every iteration, where it would race with PodBridgeCloseChannelLocked
+    // NULLing it. No lock is taken here on purpose: PodBridgeOpenChannel stores
+    // the handle before PsCreateSystemThread, and thread creation orders that
+    // store ahead of anything this thread does, so the value read is correct.
+    // Taking ConnectionLock instead would be wrong -- the creator holds it across
+    // the thread start, so any future attempt to join this thread while holding
+    // it would deadlock.
+    //
+    // Teardown does not depend on observing the NULL: closing the channel aborts
+    // the pending read, so the submit below fails and the loop exits.
+    //
+    handle = context->ChannelHandle;
 
     buffer = ExAllocatePool2(POOL_FLAG_NON_PAGED, PODBRIDGE_MAX_FRAME, PODBRIDGE_POOL_TAG);
     brb = (struct _BRB_L2CA_ACL_TRANSFER *)
@@ -156,7 +173,7 @@ PodBridgeReceiveThreadRoutine(
     while (context->StopRequested == 0) {
         context->ProfileInterface.BthReuseBrb((PBRB)brb, BRB_L2CA_ACL_TRANSFER);
         brb->BtAddress = context->RemoteAddress;
-        brb->ChannelHandle = context->ChannelHandle;
+        brb->ChannelHandle = handle;
         brb->TransferFlags = ACL_TRANSFER_DIRECTION_IN | ACL_SHORT_TRANSFER_OK;
         brb->BufferSize = PODBRIDGE_MAX_FRAME;
         brb->Buffer = buffer;
@@ -166,8 +183,22 @@ PodBridgeReceiveThreadRoutine(
         if (!NT_SUCCESS(status)) {
             break;   // channel closing / link gone -> stop the loop.
         }
-        if (brb->BufferSize > 0) {
-            PodBridgeDeliverInboundFrame(context, buffer, brb->BufferSize);
+
+        //
+        // BufferSize is in/out: on completion it carries the transferred byte
+        // count. Clamp it to what was actually allocated before handing it on.
+        // The consumer copies min(FrameLength, userOutputBufferLength) and the
+        // caller controls that second value, so an over-reported count here would
+        // turn into an out-of-bounds READ of `buffer`. The port driver should
+        // never report more than it was given -- this is defence in depth against
+        // a lower-layer contract violation, not a reachable over-the-air bug.
+        //
+        received = brb->BufferSize;
+        if (received > PODBRIDGE_MAX_FRAME) {
+            received = PODBRIDGE_MAX_FRAME;
+        }
+        if (received > 0) {
+            PodBridgeDeliverInboundFrame(context, buffer, received);
         }
     }
 
@@ -210,6 +241,26 @@ PodBridgeStartReceiveThread(
         (PVOID *)&Context->ReceiveThread,
         NULL);
     ZwClose(threadHandle);
+
+    if (!NT_SUCCESS(status)) {
+        //
+        // The thread is already running but we hold no reference to it, so
+        // PodBridgeStopReceiveThread cannot join it. Flag it to stop now; the
+        // caller closes the channel straight after, which aborts its pending
+        // read and makes it exit at the next loop check.
+        //
+        // Residual, deliberately not closed here: nothing WAITS for that exit,
+        // so a device removal racing this window could free the context while
+        // the thread is still unwinding. Closing it properly needs an exit event
+        // signalled by the thread and waited on after the channel is closed --
+        // a change to the teardown path that cannot be validated without a test
+        // machine (CI is compile-only, constitution Tier-2 gate). Left as-is
+        // because ObReferenceObjectByHandle on a just-created kernel thread
+        // handle does not fail short of handle-table corruption.
+        //
+        Context->ReceiveThread = NULL;
+        InterlockedExchange(&Context->StopRequested, 1);
+    }
     return status;
 }
 
