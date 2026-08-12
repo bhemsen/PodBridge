@@ -51,6 +51,45 @@ jobs:
           "version=$v" >> $env:GITHUB_OUTPUT
           Write-Host "Driver version: $v"
 
+      # The tag drives the zip filename and the Release, but Windows ranks drivers
+      # by the INF's own DriverVer. A forgotten bump used to pass silently: the
+      # package would say 1.0.2 while the INF inside still declared 1.0.1.0, and an
+      # already-installed 1.0.1 could then win the ranking and stay put -- a release
+      # that ships and changes nothing. docs/release.md requires the bump; this
+      # makes it enforced rather than remembered. Placed before the signing and
+      # build steps so a mismatch costs nothing.
+      - name: Verify the INF DriverVer matches the release version
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          if ($v -eq '0.0.0-dryrun') {
+            Write-Host 'Dry run with no version supplied - skipping the DriverVer check.'
+            exit 0
+          }
+
+          $inf = 'driver/PodBridgeAAP/PodBridgeAAP.inf'
+          $text = Get-Content -LiteralPath $inf -Raw
+          if ($text -notmatch '(?m)^\s*DriverVer\s*=\s*(\d{1,2}/\d{1,2}/\d{4})\s*,\s*(\d+(?:\.\d+){1,3})\s*$') {
+            throw "Could not read a well-formed 'DriverVer = MM/DD/YYYY,w.x.y.z' line from $inf."
+          }
+          $infDate = $Matches[1]
+          $infVer  = $Matches[2]
+
+          # The tag is semver (three parts, optional -prerelease); DriverVer is up to
+          # four numeric parts. Compare the first three, right-padded, and ignore any
+          # prerelease suffix, which an INF cannot express.
+          $want  = ($v -split '-')[0]
+          $parts = @($infVer -split '\.') + @('0', '0', '0')
+          $got   = $parts[0..2] -join '.'
+
+          if ($got -ne $want) {
+            throw ("DriverVer mismatch: $inf declares $infVer (-> $got) but this release is $v (-> $want). " +
+                   "Bump DriverVer in the INF to match the tag (docs/release.md, 'Advanced-tier driver release'), " +
+                   "then re-tag. Publishing as-is would ship a package Windows may refuse to rank above the " +
+                   "driver already installed.")
+          }
+          Write-Host "DriverVer OK: INF declares $infDate,$infVer for release $v"
+
       - name: Restore the stable signing PFX from secrets
         id: pfx
         shell: pwsh

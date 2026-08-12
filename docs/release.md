@@ -217,8 +217,18 @@ independent of the app above. It is **never** bundled in the app (constitution).
 - **Honesty (unchanged):** still a **TEST-signed** driver, **not** Microsoft-signed;
   loading it needs test-signing mode + trusting the cert (see
   `docs/user/advanced-tier.md`). Attestation/EV signing stays deferred.
-- **Cut a driver release:** `git tag driver-vX.Y.Z && git push origin driver-vX.Y.Z`
-  (bump the `.inf` `DriverVer` to match first).
+- **Cut a driver release:** bump the `.inf` `DriverVer` to match the tag **first**,
+  then `git tag driver-vX.Y.Z && git push origin driver-vX.Y.Z`.
+- **The `DriverVer` bump is enforced, not merely expected.** `driver-release.yml`
+  cross-checks the INF's `DriverVer` against the tag-derived version before it
+  signs or builds anything, and fails the run on a mismatch. This exists because
+  the workflow otherwise uses the tag only for the zip filename, so a forgotten
+  bump shipped silently: a `1.0.2` package whose INF still declared `1.0.1.0` —
+  and since Windows ranks drivers by `DriverVer`, an already-installed `1.0.1`
+  could win the ranking and stay put, making the release a no-op on the user's
+  machine. Only the first three components are compared (a tag carries no fourth)
+  and a `-prerelease` suffix is ignored, since an INF cannot express one. A
+  `workflow_dispatch` dry run with no version supplied skips the check.
 - An external-tool URL / dashboard is **not** the release.
 
 ## Do's and Don'ts
