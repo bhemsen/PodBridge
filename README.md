@@ -99,6 +99,18 @@ Requires the .NET 10 SDK.
 - **[User guide](docs/user/README.md)** — download, verify, setup, mic modes, auto-start, uninstall.
 - [`docs/`](docs/) — vision, architecture, roadmap, and per-phase notes.
 
+## Support PodBridge ❤️
+
+PodBridge is free and open source, developed and maintained in my spare time.
+
+If you find it useful and would like to support its continued development, you can sponsor me on GitHub.
+
+Your support helps me dedicate more time to improving PodBridge, fixing bugs, and developing new features.
+
+❤️ Sponsor development on GitHub
+
+Every contribution is appreciated, but never required. PodBridge remains free and open source.
+
 ## Special Thanks
 
 - **[Claude](https://claude.ai)** (Anthropic) — PodBridge was designed, built,
