@@ -101,13 +101,13 @@ Requires the .NET 10 SDK.
 
 ## Support PodBridge ❤️
 
-PodBridge is free and open source, developed and maintained in my spare time.
+PodBridge is free and open-source software.
 
-If you find it useful and would like to support its continued development, you can sponsor me on GitHub.
+If you enjoy using it, consider supporting my work through GitHub Sponsors.
 
-Your support helps me dedicate more time to improving PodBridge, fixing bugs, and developing new features.
+Sponsorships support all of my open-source projects and help fund ongoing maintenance and development.
 
-❤️ Sponsor development on GitHub
+Sponsorship is entirely optional. All publicly released features remain available without a sponsorship.
 
 Every contribution is appreciated, but never required. PodBridge remains free and open source.
 
