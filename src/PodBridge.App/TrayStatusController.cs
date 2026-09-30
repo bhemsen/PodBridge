@@ -17,7 +17,7 @@ public sealed class TrayStatusController : IDisposable
     private const string GuidanceTitle = "Pair your AirPods";
 
     private const string GuidanceMessage =
-        "No AirPods are paired yet. Use \"Pair / Reconnect\" to add them in Windows Bluetooth settings.";
+        "No AirPods are paired yet. Use \"Open Bluetooth settings\" to add them in Windows Bluetooth settings.";
 
     private readonly TrayIcon _tray;
     private readonly IConnectionMonitor _monitor;

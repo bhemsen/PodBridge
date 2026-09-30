@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using PodBridge.Core.Audio;
+using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Branding;
 using PodBridge.Core.Models;
 
@@ -13,10 +14,14 @@ namespace PodBridge.App;
 
 /// <summary>
 /// Owns the system-tray icon and its context menu: a status line, a battery line,
-/// a codec line, a mic-mode line, "Refresh audio status", "Pair / Reconnect",
-/// "Open Bluetooth settings", and "Exit". The status line is driven live from
+/// a codec line, a mic-mode line, "Refresh audio status", "Connect AirPods",
+/// "Disconnect AirPods", "Open Bluetooth settings", and "Exit". The status line is driven live from
 /// <c>IConnectionMonitor</c> via <see cref="TrayStatusController"/>
-/// (<see cref="SetStatus"/>); the battery line from <c>IDeviceStateProvider</c> via
+/// (<see cref="SetStatus"/>); the connect / disconnect items (one-click connect of the
+/// already-paired AirPods) via <see cref="TrayConnectController"/>
+/// (<see cref="SetConnectionHandlers"/>, <see cref="SetConnectItem"/>,
+/// <see cref="SetDisconnectItem"/>; with no handler wired, "Connect AirPods" falls back
+/// to Windows Bluetooth settings); the battery line from <c>IDeviceStateProvider</c> via
 /// <see cref="TrayBatteryController"/> (<see cref="SetBattery"/>); the codec and
 /// mic-mode lines from the read-only audio reader via <see cref="TrayAudioController"/>
 /// (<see cref="SetCodec"/>/<see cref="SetMicMode"/>, with the on-demand read wired via
@@ -68,9 +73,13 @@ public sealed class TrayIcon : IDisposable
     private readonly MenuItem _ncUnavailableItem;
     private readonly MenuItem _ncEnableTierItem;
     private readonly MenuItem _debugLoggingItem;
+    private readonly MenuItem _connectItem;
+    private readonly MenuItem _disconnectItem;
 
     private string _statusText = Placeholder;
     private string _batteryText = Placeholder;
+    private Action? _connectHandler;
+    private Action? _disconnectHandler;
     private Action? _refreshAudioHandler;
     private Action<MicPolicyMode>? _micModeHandler;
     private Action? _callModeToggleHandler;
@@ -112,6 +121,8 @@ public sealed class TrayIcon : IDisposable
         _noiseControlMenu = BuildNoiseControlMenu();
         _debugLoggingItem = new MenuItem { Header = "Debug logging", IsCheckable = true };
         _debugLoggingItem.Click += OnDebugLoggingToggle;
+        _connectItem = CreateItem(BluetoothAudioLinkText.ConnectLabel, OnConnect);
+        _disconnectItem = CreateItem(BluetoothAudioLinkText.DisconnectLabel, OnDisconnect);
         _icon = new TaskbarIcon
         {
             ToolTipText = "PodBridge",
@@ -163,6 +174,43 @@ public sealed class TrayIcon : IDisposable
     /// determine"), set verbatim. Call on the UI thread.
     /// </summary>
     public void SetMicMode(string micLine) => _micItem.Header = micLine;
+
+    /// <summary>
+    /// Wires the callbacks invoked by the "Connect AirPods" / "Disconnect AirPods" menu
+    /// actions (one-click connect of the already-paired AirPods). Call on the UI thread.
+    /// </summary>
+    public void SetConnectionHandlers(Action onConnect, Action onDisconnect)
+    {
+        _connectHandler = onConnect;
+        _disconnectHandler = onDisconnect;
+    }
+
+    /// <summary>
+    /// Sets the connect item's label (e.g. "Connect AirPods" / "Connecting…") and whether
+    /// it can be clicked. Call on the UI thread.
+    /// </summary>
+    public void SetConnectItem(string header, bool enabled)
+    {
+        _connectItem.Header = header;
+        _connectItem.IsEnabled = enabled;
+    }
+
+    /// <summary>
+    /// Sets the disconnect item's label (e.g. "Disconnect AirPods" / "Disconnecting…") and
+    /// whether it can be clicked. Call on the UI thread.
+    /// </summary>
+    public void SetDisconnectItem(string header, bool enabled)
+    {
+        _disconnectItem.Header = header;
+        _disconnectItem.IsEnabled = enabled;
+    }
+
+    /// <summary>
+    /// Opens Windows Bluetooth settings (the pairing / manual-connect fallback), showing a
+    /// non-fatal warning if the shell cannot open it. Call on the UI thread.
+    /// </summary>
+    public static void OpenBluetoothSettings()
+        => OpenUri(BluetoothSettingsUri, "Could not open Windows Bluetooth settings.");
 
     /// <summary>
     /// Wires the callback invoked by the "Refresh audio status" menu action (an
@@ -358,9 +406,8 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(_micPolicyMenu);
         menu.Items.Add(_noiseControlMenu);
         menu.Items.Add(CreateItem("Refresh audio status", OnRefreshAudio));
-        // Phase 1: "Pair / Reconnect" deep-links to Bluetooth settings like
-        // "Open Bluetooth settings"; issue #7 gives it live reconnect behaviour.
-        menu.Items.Add(CreateItem("Pair / Reconnect", OnOpenBluetoothSettings));
+        menu.Items.Add(_connectItem);
+        menu.Items.Add(_disconnectItem);
         menu.Items.Add(CreateItem("Open Bluetooth settings", OnOpenBluetoothSettings));
         menu.Items.Add(new Separator());
         menu.Items.Add(CreateItem("Gesture controls…", OnGestureSettings));
@@ -482,16 +529,32 @@ public sealed class TrayIcon : IDisposable
     private void OnAbout(object sender, RoutedEventArgs e)
         => _aboutHandler?.Invoke();
 
+    // With no handler wired, "Connect AirPods" behaves like the Phase-1 deep link and
+    // opens Windows Bluetooth settings, so the item is never a dead end.
+    private void OnConnect(object sender, RoutedEventArgs e)
+    {
+        if (_connectHandler is not null)
+        {
+            _connectHandler();
+            return;
+        }
+
+        OpenBluetoothSettings();
+    }
+
+    private void OnDisconnect(object sender, RoutedEventArgs e)
+        => _disconnectHandler?.Invoke();
+
     private static void OnOpenBluetoothSettings(object sender, RoutedEventArgs e)
-        => OpenUri(BluetoothSettingsUri, "Could not open Windows Bluetooth settings.");
+        => OpenBluetoothSettings();
 
     private static void OnExit(object sender, RoutedEventArgs e)
         => Application.Current.Shutdown();
 
     // Shell-launches a URI (a Bluetooth-settings deep link or an https docs page),
     // surfacing a non-fatal warning if the shell cannot handle it. Used for the
-    // "Open Bluetooth settings" / "Pair / Reconnect" entries and the noise-control
-    // "Enable advanced tier…" affordance.
+    // "Open Bluetooth settings" entry, the "Connect AirPods" / "Disconnect AirPods"
+    // fallback, and the noise-control "Enable advanced tier…" affordance.
     private static void OpenUri(string uri, string failMessage)
     {
         try

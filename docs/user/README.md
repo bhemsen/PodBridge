@@ -123,11 +123,12 @@ PodBridge's control.
    (system tray). There is no main window and **no UAC prompt** — PodBridge lives
    in the tray. Hover for a tooltip like `PodBridge — … · …`.
 2. **Pair your AirPods** if they are not paired yet. Right-click the tray icon and
-   choose **`Pair / Reconnect`** (this opens Windows **Bluetooth & devices**
+   choose **`Open Bluetooth settings`** (this opens Windows **Bluetooth & devices**
    settings). Put the AirPods in pairing mode — lid open, then press and hold the
    case button until the light blinks white — and add them from **Add device →
    Bluetooth**. On first run PodBridge also shows a one-time **"Pair your AirPods"**
-   notification if none are paired.
+   notification if none are paired. Once paired, later reconnects are one click:
+   **`Connect AirPods`** (see [the tray menu](#the-tray-menu)).
 3. **Confirm battery is visible.** Once the AirPods connect, right-click the tray
    icon: the **`Status:`** line reads **`Connected`** and the **`Battery:`** line
    shows the left bud, right bud, and case charge, for example
@@ -156,8 +157,21 @@ Right-click the tray icon. The menu (top to bottom):
   its driver is installed the modes are disabled with an honest explanation and an
   **`Enable advanced tier…`** entry.
 - **`Refresh audio status`** — re-reads the codec and mic lines on demand.
-- **`Pair / Reconnect`** — opens Windows Bluetooth settings to add or reconnect AirPods.
-- **`Open Bluetooth settings`** — opens Windows Bluetooth settings.
+- **`Connect AirPods`** — connects your **already-paired** AirPods in one click,
+  the same request Windows' Sound control panel sends for **Connect** (no driver,
+  no admin). Take the AirPods out of the case (or open the lid) near the PC first.
+  The item shows **`Connecting…`** while PodBridge waits for the link to come up —
+  usually a few seconds; right after a disconnect it can take longer, so PodBridge
+  repeats the request and waits up to about 45 seconds. If no paired AirPods are
+  found, Windows declines, or they don't connect in time, PodBridge says so and
+  opens Windows Bluetooth settings instead. Disabled while the AirPods are
+  `Connected`. If several AirPods are paired to this PC, the request goes to all of
+  them and whichever pair is nearby connects.
+- **`Disconnect AirPods`** — disconnects the AirPods from this PC (shown as
+  **`Disconnecting…`** while it waits). They **stay paired**: use `Connect AirPods`
+  to bring them back. Enabled while they are `Connected`.
+- **`Open Bluetooth settings`** — opens Windows Bluetooth settings (to pair new
+  AirPods, or to connect manually).
 - **`About PodBridge`** — opens the About window (disclaimer, license, version, docs link).
 - **`Exit`** — quits PodBridge.
 
@@ -325,9 +339,11 @@ local-only.
 ## Troubleshooting
 
 - **`Status: No AirPods paired`** — no AirPods are paired to this PC yet. Use
-  `Pair / Reconnect` and add them in Windows Bluetooth settings.
+  `Open Bluetooth settings` and add them in Windows Bluetooth settings.
 - **`Status: Disconnected`** — the AirPods are paired but not connected. Take them
-  out of the case / near the PC, or use `Pair / Reconnect`.
+  out of the case / near the PC and use `Connect AirPods`. If they still don't
+  connect (for example they are connected to your phone right now, or out of
+  range), PodBridge opens Windows Bluetooth settings so you can connect manually.
 - **`Status: Bluetooth unavailable`** — the PC's Bluetooth radio is off or missing.
   Turn Bluetooth on in Windows settings.
 - **`Battery: unknown / out of range`** — no live reading (disconnected or the

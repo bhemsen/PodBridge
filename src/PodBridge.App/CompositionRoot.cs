@@ -75,6 +75,16 @@ public static class CompositionRoot
         // container disposes it (IDisposable) on shutdown, unsubscribing it.
         services.AddSingleton<BleScannerSupervisor>();
 
+        // One-click connect / disconnect of already-paired AirPods (follow-up to issue #7).
+        // Core policy driving the driver-free IBluetoothAudioConnector: it confirms an
+        // accepted request via the link state, re-sends a request the driver silently
+        // dropped (common right after a disconnect) and gives up after a generous timeout.
+        // A singleton so its single-operation guard spans the whole app; the tray
+        // (TrayConnectController) is its only consumer. Built via a factory so the connector
+        // is bound explicitly and the poll / re-send / timeout / clock defaults apply.
+        services.AddSingleton(sp => new BluetoothAudioLinkController(
+            sp.GetRequiredService<IBluetoothAudioConnector>()));
+
         // Phase 4 mic-profile policy engine (issue #30). A singleton holding live event
         // subscriptions to IAudioSessionMonitor for the app's lifetime (disposed by the
         // container on shutdown). Constructed at startup so it runs on the background

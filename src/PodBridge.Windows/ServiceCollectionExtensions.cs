@@ -19,7 +19,8 @@ namespace PodBridge.Windows;
 /// read-only audio-state reader; Phase 4 adds the mic-profile policy lever
 /// (<see cref="IAudioPolicy"/>) and the comms-capture session monitor
 /// (<see cref="IAudioSessionMonitor"/>); Phase 5 adds the opt-in auto-start toggle
-/// (<see cref="IStartupToggle"/>).
+/// (<see cref="IStartupToggle"/>). The one-click connect adds the paired-AirPods
+/// connect / disconnect lever (<see cref="IBluetoothAudioConnector"/>).
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -53,6 +54,13 @@ public static class ServiceCollectionExtensions
         // creates and releases short-lived Core Audio COM objects per Read() — so it
         // needs no shared lifetime and is registered transient (no IDisposable).
         services.AddTransient<IAudioStateReader, WindowsAudioStateReader>();
+
+        // One-click connect / disconnect of already-paired AirPods (follow-up to issue #7).
+        // Stateless like the audio-state reader: it creates and releases short-lived Core
+        // Audio / device-topology COM objects per call and holds nothing between calls, so it
+        // is transient. Driver-free and admin-free — it sends the public one-shot KS request
+        // the Windows Sound control panel uses; any COM failure degrades, never throws.
+        services.AddTransient<IBluetoothAudioConnector, WindowsBluetoothAudioConnector>();
 
         // Phase 4 mic-profile policy (issue #30). Both are singletons: the session
         // monitor owns a background MTA COM thread + IAudioSessionManager2 notification

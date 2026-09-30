@@ -12,7 +12,7 @@ clearly-labelled add-on.
 > no Apple logo.
 
 <p align="center">
-  <img src="docs/example.png" alt="PodBridge tray menu on Windows: Status Connected, Battery L and R 100%, microphone-mode and noise-control submenus, Pair / Reconnect, Export diagnostics, and About PodBridge" width="360">
+  <img src="docs/example.png" alt="PodBridge tray menu on Windows: Status Connected, Battery L and R 100%, microphone-mode and noise-control submenus, Bluetooth connection entries, Export diagnostics, and About PodBridge" width="360">
   <br>
   <em>PodBridge lives in the system tray — battery, audio status, microphone &amp; noise-control modes, pairing, and diagnostics, one right-click away.</em>
 </p>
@@ -33,10 +33,12 @@ single-file `.exe`** — no installer, no admin rights, nothing else to set up.
    not a sign of a problem. Click **More info → Run anyway**.
 
 **Set up in under 2 minutes:** launch PodBridge (a tray icon appears — no window,
-no UAC prompt) → right-click the icon and choose **`Pair / Reconnect`** to add
-your AirPods in Windows Bluetooth settings → once they connect, the tray
+no UAC prompt) → right-click the icon and choose **`Open Bluetooth settings`** to
+pair your AirPods in Windows → once they connect, the tray
 **`Status:`** line reads **`Connected`** and the **`Battery:`** line shows
-left/right/case charge. That's it: **paired, playing, battery visible.**
+left/right/case charge. That's it: **paired, playing, battery visible.** Later,
+reconnect already-paired AirPods in one click with **`Connect AirPods`** (no
+driver, no admin).
 
 Settings and logs live under `%LOCALAPPDATA%\PodBridge`. To uninstall: quit
 PodBridge (tray → `Exit`) and delete the exe and the `%LOCALAPPDATA%\PodBridge`

@@ -20,12 +20,12 @@ flowchart TB
     end
 
     subgraph Core["PodBridge.Core — platform-neutral domain (no OS, no P/Invoke)"]
-        Domain["Domain logic: AapProtocol · ContinuityParser · DeviceStateTracker · AutoPlayPauseEngine · MicPolicyEngine · AudioGuidanceEngine · ModelRegistry · CapabilityProvider · Diagnostics · NoiseControlController · GestureSettingsController / GestureRepushController"]
+        Domain["Domain logic: AapProtocol · ContinuityParser · DeviceStateTracker · AutoPlayPauseEngine · MicPolicyEngine · AudioGuidanceEngine · BluetoothAudioLinkController · ModelRegistry · CapabilityProvider · Diagnostics · NoiseControlController · GestureSettingsController / GestureRepushController"]
         Ifaces["OS-boundary interfaces (abstractions)"]
     end
 
     subgraph Win["PodBridge.Windows — OS adapters (WinRT + P/Invoke, no UI)"]
-        Adapters["WinRtBleScanner · WinRtConnectionMonitor · WinRtBluetoothRadioSource · WindowsMediaController · WindowsAudioStateReader · WindowsAudioPolicy · WindowsAudioSessionMonitor · RunKeyStartupToggle · DiagnosticsExporter · RollingFileLoggerProvider"]
+        Adapters["WinRtBleScanner · WinRtConnectionMonitor · WindowsBluetoothAudioConnector · WinRtBluetoothRadioSource · WindowsMediaController · WindowsAudioStateReader · WindowsAudioPolicy · WindowsAudioSessionMonitor · RunKeyStartupToggle · DiagnosticsExporter · RollingFileLoggerProvider"]
         T2Adapters["Tier 2: DriverAapTransport · AdvancedTierInstaller"]
     end
 
@@ -65,6 +65,7 @@ flowchart LR
         I9["IDiagnosticsExporter"]
         I10["IAapTransport — Tier 2"]
         I11["IAdvancedTierInstaller — Tier 2"]
+        I12["IBluetoothAudioConnector"]
     end
     subgraph WinImpl["PodBridge.Windows — implementation"]
         A1["WinRtBleScanner"]
@@ -78,6 +79,7 @@ flowchart LR
         A9["DiagnosticsExporter"]
         A10["DriverAapTransport"]
         A11["AdvancedTierInstaller"]
+        A12["WindowsBluetoothAudioConnector"]
     end
     I1 --- A1
     I2 --- A2
@@ -90,6 +92,7 @@ flowchart LR
     I9 --- A9
     I10 --- A10
     I11 --- A11
+    I12 --- A12
 ```
 
 ## 3. Key flows
@@ -136,7 +139,32 @@ sequenceDiagram
     Eng->>Pol: restore prior routing
 ```
 
-### 3.3 Noise-control switching (Tier 2, opt-in driver)
+### 3.3 One-click connect / disconnect (Tier 1, driver-free, no admin)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant UI as TrayConnectController (App)
+    participant Link as BluetoothAudioLinkController (Core)
+    participant Con as WindowsBluetoothAudioConnector (Windows)
+    participant Drv as Windows Bluetooth audio filters (A2DP + hands-free)
+
+    UI->>Link: Connect AirPods (off the UI thread)
+    Link->>Con: GetLinkState()
+    alt no paired AirPods / already connected
+        Con-->>Link: NotFound / Connected
+    else paired, disconnected
+        Link->>Con: SendRequest(Connect)
+        Con->>Drv: one-shot reconnect (KSPROPSETID_BtAudio) to every filter
+        loop poll every 500 ms, re-send every 10 s, up to 45 s
+            Link->>Con: GetLinkState()
+        end
+    end
+    Link-->>UI: outcome
+    UI->>UI: honest notification; on failure open Bluetooth settings
+```
+
+### 3.4 Noise-control switching (Tier 2, opt-in driver)
 
 ```mermaid
 sequenceDiagram
