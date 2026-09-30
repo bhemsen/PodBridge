@@ -1,4 +1,5 @@
 using PodBridge.Core.Audio;
+using PodBridge.Core.Bluetooth;
 using PodBridge.Core.Branding;
 using Xunit;
 
@@ -101,6 +102,16 @@ public class UserDocsTests
 
         // Auto-start (issue #35) is opt-in, default OFF.
         Assert.Contains("off by default", UserGuide, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UserGuide_DocumentsOneClickConnectAndDisconnect()
+    {
+        Assert.Contains(BluetoothAudioLinkText.ConnectLabel, UserGuide, StringComparison.Ordinal);
+        Assert.Contains(BluetoothAudioLinkText.DisconnectLabel, UserGuide, StringComparison.Ordinal);
+        Assert.Contains(BluetoothAudioLinkText.ConnectLabel, Readme, StringComparison.Ordinal);
+        Assert.DoesNotContain("Pair / Reconnect", UserGuide, StringComparison.Ordinal);
+        Assert.DoesNotContain("Pair / Reconnect", Readme, StringComparison.Ordinal);
     }
 
     [Fact]

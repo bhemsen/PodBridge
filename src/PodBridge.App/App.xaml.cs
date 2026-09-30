@@ -31,6 +31,7 @@ public partial class App : Application
     private GestureSettingsWindow? _gestureSettingsWindow;
     private AudioRecoveryWindow? _audioRecoveryWindow;
     private TrayStatusController? _trayStatusController;
+    private TrayConnectController? _trayConnectController;
     private TrayBatteryController? _trayBatteryController;
     private TrayAudioController? _trayAudioController;
     private TrayMicController? _trayMicController;
@@ -78,6 +79,10 @@ public partial class App : Application
             _trayIcon, audioReader, monitor, Dispatcher);
         _trayAudioController.Start();
 
+        // Started before the status controller (which starts the monitor) so its
+        // StatusChanged subscription sees the initial status.
+        StartConnectController(monitor);
+
         // Drive the tray from live connection status and show first-run pairing
         // guidance. StatusChanged is marshalled to this (UI) dispatcher inside
         // the controller.
@@ -89,6 +94,19 @@ public partial class App : Application
         StartMicPolicyPipeline();
         StartNoiseControlPipeline();
         StartDiagnostics();
+    }
+
+    // Wires the one-click "Connect AirPods" / "Disconnect AirPods" items for the
+    // already-paired AirPods (driver-free, no admin; the Core link controller falls back to
+    // Windows Bluetooth settings on failure via the tray controller).
+    private void StartConnectController(IConnectionMonitor monitor)
+    {
+        _trayConnectController = TrayConnectController.Create(
+            _trayIcon!,
+            _host!.Services.GetRequiredService<BluetoothAudioLinkController>(),
+            monitor,
+            Dispatcher);
+        _trayConnectController.Start();
     }
 
     // Wires the tray "Export diagnostics" action and the "Debug logging" toggle (issue #54).
@@ -349,6 +367,11 @@ public partial class App : Application
 
         _trayStatusController?.Dispose();
         _trayStatusController = null;
+
+        // Unsubscribe the connect controller and cancel any in-flight connect/disconnect
+        // wait so no late outcome touches a disposed tray.
+        _trayConnectController?.Dispose();
+        _trayConnectController = null;
 
         // The diagnostics controller owns no subscription (it only wired tray handlers), so
         // dropping the reference is enough; the container disposes its resolved services.
