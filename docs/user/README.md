@@ -165,11 +165,14 @@ Right-click the tray icon. The menu (top to bottom):
   repeats the request and waits up to about 45 seconds. If no paired AirPods are
   found, Windows declines, or they don't connect in time, PodBridge says so and
   opens Windows Bluetooth settings instead. Disabled while the AirPods are
-  `Connected`. If several AirPods are paired to this PC, the request goes to all of
+  `Connected`. PodBridge recognises AirPods by name (the name must contain
+  "AirPods"), so a paired **Beats** device is never connected or disconnected by
+  these items. If several AirPods are paired to this PC, the request goes to all of
   them and whichever pair is nearby connects.
 - **`Disconnect AirPods`** — disconnects the AirPods from this PC (shown as
   **`Disconnecting…`** while it waits). They **stay paired**: use `Connect AirPods`
-  to bring them back. Enabled while they are `Connected`.
+  to bring them back. Enabled while they are `Connected`. With several AirPods paired,
+  every connected pair is disconnected.
 - **`Open Bluetooth settings`** — opens Windows Bluetooth settings (to pair new
   AirPods, or to connect manually).
 - **`About PodBridge`** — opens the About window (disclaimer, license, version, docs link).

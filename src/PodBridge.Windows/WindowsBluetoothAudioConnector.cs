@@ -13,11 +13,14 @@ namespace PodBridge.Windows;
 /// <remarks>
 /// <para><b>Finding the AirPods.</b> Audio endpoints of installed devices (active or
 /// unplugged, render and capture) are matched by friendly name with
-/// <see cref="AirPodsNameHeuristic"/>. An endpoint is <c>DEVICE_STATE_ACTIVE</c> while the
-/// Bluetooth link is up and <c>DEVICE_STATE_UNPLUGGED</c> while a paired device is
-/// disconnected, which is how <see cref="GetLinkState"/> reports the link.</para>
-/// <para><b>The request.</b> For every matched endpoint the device topology is walked
-/// (<c>IDeviceTopology</c> → connector → connected <c>IPart</c> → topology object) to the
+/// <see cref="AirPodsNameHeuristic.IsAirPodsName"/> — AirPods only, so a paired Beats
+/// device is never connected or disconnected by an "AirPods" action. An endpoint is
+/// <c>DEVICE_STATE_ACTIVE</c> while the Bluetooth link is up and
+/// <c>DEVICE_STATE_UNPLUGGED</c> while a paired device is disconnected, which is how
+/// <see cref="GetLinkState"/> reports the link. An endpoint that fails mid-enumeration
+/// (e.g. it is removed meanwhile) is skipped rather than failing the whole result.</para>
+/// <para><b>The request.</b> For every matched endpoint the device topology's connectors
+/// are followed (<c>IConnector::GetDeviceIdConnectedTo</c>) to the
 /// Bluetooth audio driver's filter (id prefix <c>{2}.\\?\bth</c>: the A2DP stereo and the
 /// hands-free filter). Each distinct filter receives the public one-shot
 /// <c>KSPROPERTY_ONESHOT_RECONNECT</c> / <c>KSPROPERTY_ONESHOT_DISCONNECT</c> request
@@ -120,18 +123,7 @@ public sealed class WindowsBluetoothAudioConnector : IBluetoothAudioConnector
             collection.GetCount(out var count);
             for (uint i = 0; i < count; i++)
             {
-                collection.Item(i, out var device);
-                try
-                {
-                    if (IsAirPodsEndpoint(device))
-                    {
-                        visit(device);
-                    }
-                }
-                finally
-                {
-                    Marshal.ReleaseComObject(device);
-                }
+                TryVisitEndpoint(collection, i, visit);
             }
         }
         finally
@@ -140,12 +132,39 @@ public sealed class WindowsBluetoothAudioConnector : IBluetoothAudioConnector
         }
     }
 
+    // One endpoint failing (e.g. removed during enumeration, or its property store / state
+    // unreadable) must not degrade the whole result into NotFound / Rejected — and with it
+    // a confirmation poll into a false timeout — so it is skipped and the loop continues.
+    private static void TryVisitEndpoint(IMMDeviceCollection collection, uint index, Action<IMMDevice> visit)
+    {
+        IMMDevice? device = null;
+        try
+        {
+            collection.Item(index, out device);
+            if (IsAirPodsEndpoint(device))
+            {
+                visit(device);
+            }
+        }
+        catch (Exception)
+        {
+            // Skip this endpoint; the others are still read.
+        }
+        finally
+        {
+            if (device is not null)
+            {
+                Marshal.ReleaseComObject(device);
+            }
+        }
+    }
+
     private static bool IsAirPodsEndpoint(IMMDevice device)
     {
         device.OpenPropertyStore(NativeMethods.StgmRead, out var store);
         try
         {
-            return AirPodsNameHeuristic.IsMatch(
+            return AirPodsNameHeuristic.IsAirPodsName(
                 NativeMethods.GetStringProperty(store, PropertyKeys.DeviceFriendlyName));
         }
         finally
@@ -191,32 +210,13 @@ public sealed class WindowsBluetoothAudioConnector : IBluetoothAudioConnector
     private static string? TryGetConnectedFilterId(IDeviceTopology topology, uint index)
     {
         topology.GetConnector(index, out var connector);
-        IConnector? connectedTo = null;
         try
         {
-            if (connector.GetConnectedTo(out connectedTo) < 0 || connectedTo is null)
-            {
-                return null; // an unconnected connector: nothing behind it
-            }
-
-            ((IPart)connectedTo).GetTopologyObject(out var filterTopology);
-            try
-            {
-                filterTopology.GetDeviceId(out var filterId);
-                return filterId;
-            }
-            finally
-            {
-                Marshal.ReleaseComObject(filterTopology);
-            }
+            // An unconnected connector fails (E_NOTFOUND): nothing behind it.
+            return connector.GetDeviceIdConnectedTo(out var filterId) < 0 ? null : filterId;
         }
         finally
         {
-            if (connectedTo is not null)
-            {
-                Marshal.ReleaseComObject(connectedTo);
-            }
-
             Marshal.ReleaseComObject(connector);
         }
     }
@@ -233,7 +233,7 @@ public sealed class WindowsBluetoothAudioConnector : IBluetoothAudioConnector
             enumerator.GetDevice(filterId, out filter);
             var iid = typeof(IKsControl).GUID;
             filter.Activate(ref iid, NativeMethods.ClsCtxAll, IntPtr.Zero, out raw);
-            var property = new KsProperty
+            var property = new KsPropertyHeader
             {
                 Set = BluetoothAudioInterop.KsPropSetIdBtAudio,
                 Id = request == BluetoothAudioRequest.Connect
@@ -242,7 +242,7 @@ public sealed class WindowsBluetoothAudioConnector : IBluetoothAudioConnector
                 Flags = BluetoothAudioInterop.KsPropertyTypeGet,
             };
             var hr = ((IKsControl)raw).KsProperty(
-                ref property, (uint)Marshal.SizeOf<KsProperty>(), IntPtr.Zero, 0, out _);
+                ref property, (uint)Marshal.SizeOf<KsPropertyHeader>(), IntPtr.Zero, 0, out _);
             return hr >= 0;
         }
         catch (Exception)

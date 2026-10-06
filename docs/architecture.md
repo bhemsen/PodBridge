@@ -143,8 +143,9 @@
    "Connect AirPods" / "Disconnect AirPods" → `TrayConnectController` (`App`) runs
    Core's `BluetoothAudioLinkController` off the UI thread →
    `WindowsBluetoothAudioConnector` (`IBluetoothAudioConnector`) enumerates the
-   paired AirPods' render + capture endpoints (name heuristic; active or unplugged),
-   walks each endpoint's device topology to its Bluetooth audio filters (A2DP and
+   paired AirPods' render + capture endpoints (AirPods-only name match — Beats are
+   excluded; active or unplugged; an endpoint that fails mid-enumeration is skipped),
+   follows each endpoint's device-topology connectors to its Bluetooth audio filters (A2DP and
    hands-free), and sends the documented one-shot reconnect/disconnect property
    (`KSPROPSETID_BtAudio`, Windows SDK `ksmedia.h`) to every filter — the same request
    the Sound control panel's **Connect** sends. A successful send only means the driver

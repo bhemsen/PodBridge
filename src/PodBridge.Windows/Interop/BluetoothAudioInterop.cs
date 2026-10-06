@@ -41,9 +41,12 @@ internal static class BluetoothAudioInterop
     internal static readonly Guid KsPropSetIdBtAudio = new("7FA06C40-B8F6-4C7E-8556-E8C33A12E54D");
 }
 
-/// <summary>The <c>KSPROPERTY</c> identifier (ks.h): property set, id and flags (24 bytes).</summary>
+/// <summary>
+/// The <c>KSPROPERTY</c> identifier (ks.h): property set, id and flags (24 bytes). Named
+/// <c>…Header</c> to keep it distinct from the <see cref="IKsControl.KsProperty"/> method.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
-internal struct KsProperty
+internal struct KsPropertyHeader
 {
     public Guid Set;
     public uint Id;
@@ -51,9 +54,9 @@ internal struct KsProperty
 }
 
 /// <summary>
-/// The <c>IMMDevice</c> surface extended through <c>GetState</c> (vtable slot 4), which the
+/// The <c>IMMDevice</c> surface extended through <c>GetState</c> (vtable slot 3), which the
 /// read-only <see cref="IMMDevice"/> in CoreAudioInterop.cs does not declare. Same IID;
-/// slots 1–3 mirror the real signatures purely to place <c>GetState</c> at slot 4.
+/// slots 0–2 mirror the real signatures purely to place <c>GetState</c> at slot 3.
 /// </summary>
 [ComImport]
 [Guid("D666063F-1587-4E43-81F1-B948E807363F")]
@@ -82,15 +85,6 @@ internal interface IDeviceTopology
     void GetConnectorCount(out uint pCount);
 
     void GetConnector(uint nIndex, out IConnector ppConnector);
-
-    // Slots 2–4 (unused) — declared only to place GetDeviceId at slot 5.
-    void GetSubunitCount(out uint pCount);
-
-    void GetSubunit(uint nIndex, out IntPtr ppSubunit);
-
-    void GetPartById(uint nId, out IntPtr ppPart);
-
-    void GetDeviceId([MarshalAs(UnmanagedType.LPWStr)] out string ppwstrDeviceId);
 }
 
 /// <summary><c>IConnector</c> (devicetopology.h) — a connection point between two topologies.</summary>
@@ -99,7 +93,7 @@ internal interface IDeviceTopology
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IConnector
 {
-    // Slots 0–4 (unused) — declared only to place GetConnectedTo at slot 5.
+    // Slots 0–6 (unused) — declared only to place GetDeviceIdConnectedTo at slot 7.
     void GetConnectorType(out int pType);
 
     void GetDataFlow(out int pFlow);
@@ -110,40 +104,15 @@ internal interface IConnector
 
     void IsConnected(out int pbConnected);
 
-    // An unconnected connector returns E_NOTFOUND; PreserveSig lets the caller skip it.
+    void GetConnectedTo(out IntPtr ppConTo);
+
+    void GetConnectorIdConnectedTo(out IntPtr ppwstrConnectorId);
+
+    // The device id of the topology on the other side — for an AirPods endpoint, the
+    // Bluetooth audio driver's KS filter. An unconnected connector returns E_NOTFOUND;
+    // PreserveSig lets the caller skip it.
     [PreserveSig]
-    int GetConnectedTo(out IConnector ppConTo);
-}
-
-/// <summary>
-/// <c>IPart</c> (devicetopology.h) — queried from the connected <see cref="IConnector"/> to
-/// reach the device topology (the driver's KS filter) on the other side of the endpoint.
-/// </summary>
-[ComImport]
-[Guid("AE2DE0E4-5BCA-4F2D-AA46-5D13F8FDB3A9")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IPart
-{
-    // Slots 0–8 (unused) — declared only to place GetTopologyObject at slot 9.
-    void GetName(out IntPtr ppwstrName);
-
-    void GetLocalId(out uint pnId);
-
-    void GetGlobalId(out IntPtr ppwstrGlobalId);
-
-    void GetPartType(out int pPartType);
-
-    void GetSubType(out Guid pSubType);
-
-    void GetControlInterfaceCount(out uint pCount);
-
-    void GetControlInterface(uint nIndex, out IntPtr ppInterfaceDesc);
-
-    void EnumPartsIncoming(out IntPtr ppParts);
-
-    void EnumPartsOutgoing(out IntPtr ppParts);
-
-    void GetTopologyObject(out IDeviceTopology ppTopology);
+    int GetDeviceIdConnectedTo([MarshalAs(UnmanagedType.LPWStr)] out string? ppwstrDeviceId);
 }
 
 /// <summary><c>IKsControl</c> (ks.h) — sends a KS property request to a driver filter.</summary>
@@ -154,7 +123,7 @@ internal interface IKsControl
 {
     [PreserveSig]
     int KsProperty(
-        ref KsProperty property,
+        ref KsPropertyHeader property,
         uint propertyLength,
         IntPtr propertyData,
         uint dataLength,

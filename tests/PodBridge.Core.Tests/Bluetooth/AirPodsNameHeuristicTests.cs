@@ -22,4 +22,21 @@ public class AirPodsNameHeuristicTests
     [InlineData("Galaxy Buds")]
     public void OtherOrEmptyNames_DoNotMatch(string? name)
         => Assert.False(AirPodsNameHeuristic.IsMatch(name));
+
+    [Theory]
+    [InlineData("AirPods Pro")]
+    [InlineData("Headphones (AirPods Pro (Anton))")] // an audio endpoint's friendly name
+    [InlineData("airpods max")] // case-insensitive
+    public void AirPodsNames_AreAirPodsNames(string name)
+        => Assert.True(AirPodsNameHeuristic.IsAirPodsName(name));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("Beats Fit Pro")]
+    [InlineData("Headphones (Powerbeats Pro)")]
+    [InlineData("Sony WH-1000XM5")]
+    public void BeatsOtherOrEmptyNames_AreNotAirPodsNames(string? name)
+        => Assert.False(AirPodsNameHeuristic.IsAirPodsName(name));
 }
